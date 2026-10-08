@@ -1,0 +1,88 @@
+---
+import Icon from '../../components/Icon.astro';
+import Layout from '../../layouts/Layout.astro';
+import { expireSessions, getArchives, sessionScores } from '../../lib/store.ts';
+import { requireDemo, demoState, demoLink } from '../../lib/demo-access.ts';
+import { withDemo } from '../../lib/demo-workspaces.ts';
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+let state;
+let error = '';
+let sessions: (ReturnType<typeof getArchives>[number] & {
+  scores: ReturnType<typeof sessionScores>;
+})[] = [];
+try {
+  const { id, owner } = requireDemo(Astro.cookies, Astro.url, Astro.clientAddress, true);
+  state = demoState(id, owner, Astro.cookies, Astro.url);
+  sessions = withDemo(id, () => {
+    expireSessions();
+    return getArchives().map((session) => ({ ...session, scores: sessionScores(session.id) }));
+  });
+} catch (cause) {
+  Astro.response.status = 403;
+  error = cause instanceof Error ? cause.message : 'Unable to load this demo.';
+}
+---
+
+<Layout title="Power Hour archive" active="archive" demo={state}>
+  {state ? (
+    <>
+      <div class="page-heading">
+        <div>
+          <h1>Power Hour archive</h1>
+          <p>Past Power Hour results. Scores are tracked separately from the main leaderboard.</p>
+        </div>
+      </div>
+      <div class="archive-grid">
+        {sessions.map((s) => (
+          <a
+            class="panel archive-card competition-card"
+            href={demoLink(`/demo/archive/${s.id}`, Astro.url)}
+            aria-label={`View ${s.name} full results`}
+          >
+            <span class="pill">Archived</span>
+            <h2>{s.name}</h2>
+            <p>
+              Tracking {s.metric_label || 'points'} ·{' '}
+              {new Date(s.created_at).toLocaleString('en-US', { timeZone: 'UTC' })} UTC
+            </p>
+            <ol>
+              {s.scores.slice(0, 5).map((p, i) => (
+                <li>
+                  <span>
+                    {String(i + 1).padStart(2, '0')}. {p.name}
+                    {p.flagged && <small> · review entry rate</small>}
+                  </span>
+                  <strong>
+                    {p.clicks} {s.metric_label || 'points'}
+                  </strong>
+                </li>
+              ))}
+            </ol>
+            <span class="competition-card-action">
+              View full results <Icon />
+            </span>
+          </a>
+        ))}
+      </div>
+      {!sessions.length && (
+        <div class="panel empty-state">
+          No archived Power Hours yet.
+          <br />
+          <a href={demoLink('/demo/admin#power-hour', Astro.url)}>
+            Start your first Power Hour <Icon />
+          </a>
+        </div>
+      )}
+    </>
+  ) : (
+    <section class="panel">
+      <h1>This demo is unavailable</h1>
+      <p class="error" role="alert">
+        {error}
+      </p>
+      <a class="button button-accent" href="/demo">
+        Start your own demo
+      </a>
+    </section>
+  )}
+</Layout>

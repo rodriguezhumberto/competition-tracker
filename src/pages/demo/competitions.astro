@@ -1,0 +1,65 @@
+---
+import Icon from '../../components/Icon.astro';
+import Layout from '../../layouts/Layout.astro';
+import { getCompetitions } from '../../lib/store.ts';
+import { requireDemo, demoState, demoLink } from '../../lib/demo-access.ts';
+import { withDemo } from '../../lib/demo-workspaces.ts';
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+let state;
+let error = '';
+let competitions: ReturnType<typeof getCompetitions> = [];
+try {
+  const { id, owner } = requireDemo(Astro.cookies, Astro.url, Astro.clientAddress, true);
+  if (!owner) throw new Error('Only the demo owner can manage competitions.');
+  state = demoState(id, owner, Astro.cookies, Astro.url);
+  competitions = withDemo(id, getCompetitions);
+} catch (cause) {
+  Astro.response.status = 403;
+  error = cause instanceof Error ? cause.message : 'Unable to load this demo.';
+}
+---
+
+<Layout title="Competitions" active="competitions" demo={state}>
+  {state ? (
+    <>
+      <div class="page-heading">
+        <div>
+          <h1>Competitions</h1>
+        </div>
+      </div>
+      <div class="archive-grid">
+        {competitions.map((c) => (
+          <a
+            class="panel archive-card competition-card"
+            href={demoLink(`/demo/competitions/${c.id}`, Astro.url)}
+            aria-label={`View ${c.name} standings`}
+          >
+            <span class="pill">{c.is_active ? 'Active competition' : 'Competition'}</span>
+            <h2>{c.name}</h2>
+            <p>
+              {c.start_date} — {c.end_date}
+            </p>
+            <div class="eyebrow">OFFICIAL RANKING: {c.metric_label.toUpperCase()}</div>
+            <span class="competition-card-action">
+              View standings <Icon />
+            </span>
+          </a>
+        ))}
+      </div>
+      {!competitions.length && <div class="panel empty-state">No competitions yet.</div>}
+    </>
+  ) : (
+    <section class="panel">
+      <h1>This demo is unavailable</h1>
+      <p class="error" role="alert">
+        {error}
+      </p>
+      <a class="button button-outline" href={demoLink('/demo', Astro.url)}>
+        Back to leaderboard
+      </a>
+      <a class="button button-accent" href="/demo">
+        Start your own demo
+      </a>
+    </section>
+  )}
+</Layout>

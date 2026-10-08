@@ -1,0 +1,64 @@
+---
+import Icon from '../Icon.astro';
+import type { getCompetitions } from '../../lib/store.ts';
+
+interface Props {
+  competitions: ReturnType<typeof getCompetitions>;
+  base?: string;
+  activateUrl?: string;
+  query?: Record<string, string>;
+}
+
+const {
+  competitions,
+  base = '/competitions',
+  activateUrl = '/api/admin',
+  query = {},
+} = Astro.props;
+const context = new URLSearchParams(query).toString();
+---
+
+<section class="panel full-panel">
+  <h2>Your competitions</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>COMPETITION</th>
+          <th>OFFICIAL METRIC</th>
+          <th>DATES</th>
+          <th>STATUS</th>
+        </tr>
+      </thead>
+      <tbody>
+        {competitions.map((c) => (
+          <tr>
+            <td>
+              <a href={`${base}/${c.id}${context ? '?' + context : ''}`}>
+                <strong>{c.name}</strong> · Dashboard & settings <Icon />
+              </a>
+            </td>
+            <td>{c.metric_label}</td>
+            <td>
+              {c.start_date} — {c.end_date}
+            </td>
+            <td>
+              {c.is_active ? (
+                <span class="pill">Active</span>
+              ) : (
+                <form method="POST" action={activateUrl}>
+                  <input type="hidden" name="action" value="activate" />
+                  <input type="hidden" name="competition_id" value={c.id} />
+                  <button class="text-button">
+                    Make active <Icon />
+                  </button>
+                </form>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  {!competitions.length && <p class="empty-state">Create your first competition above.</p>}
+</section>

@@ -1,0 +1,56 @@
+---
+import Icon from '../../components/Icon.astro';
+import Layout from '../../layouts/Layout.astro';
+import { allowAttempt, isAdmin, newSession, passcodeMatches, sameOrigin } from '../../lib/auth.ts';
+import { limitedFormData } from '../../lib/http.ts';
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+if (isAdmin(Astro.cookies)) return Astro.redirect('/admin');
+let error = '';
+if (Astro.request.method === 'POST') {
+  try {
+    if (!sameOrigin(Astro.request)) throw new Error('Invalid origin.');
+    if (!allowAttempt(`admin:${Astro.clientAddress}`))
+      throw new Error('Too many attempts. Try again in 10 minutes.');
+    const form = await limitedFormData(Astro.request, 4096);
+    if (!passcodeMatches(form.get('passcode')))
+      throw new Error('Incorrect passcode, or ADMIN_PASSCODE has not been configured.');
+    Astro.cookies.set('admin', newSession(), {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: Astro.url.protocol === 'https:',
+      path: '/',
+      maxAge: 43200,
+    });
+    return Astro.redirect('/admin', 303);
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Unable to sign in.';
+  }
+}
+---
+
+<Layout title="Admin sign in" active="admin">
+  <section class="login-card">
+    <h1>Admin sign in</h1>
+    <p>Enter your admin passcode to manage competitions and record progress.</p>
+    {!process.env.ADMIN_PASSCODE && (
+      <p class="notice">Set ADMIN_PASSCODE in your .env file to enable admin access.</p>
+    )}
+    {error && (
+      <p class="error" role="alert">
+        {error}
+      </p>
+    )}
+    <form method="POST">
+      <label>
+        Admin passcode
+        <input name="passcode" type="password" autocomplete="current-password" required autofocus />
+      </label>
+      <button class="button button-accent" type="submit">
+        Sign in{' '}
+        <span>
+          <Icon />
+        </span>
+      </button>
+    </form>
+  </section>
+</Layout>

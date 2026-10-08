@@ -1,0 +1,237 @@
+---
+import { formatMetric } from '../lib/metrics.ts';
+import type { leaderboard } from '../lib/competition-store.ts';
+interface Props {
+  board: ReturnType<typeof leaderboard>;
+  base: string;
+  query?: Record<string, string>;
+}
+const { board, base, query = {} } = Astro.props;
+const { rows, selected, metrics, period } = board;
+const ranked = rows.filter((row) => row.rank !== null);
+const peak = Math.max(0, ...ranked.map((row) => Number(row.values[selected.key] || 0)));
+---
+
+<div class="compact-standings" data-compact-standings>
+  {ranked.length > 0 && (
+    <div
+      class="compact-vertical-chart"
+      role="list"
+      aria-label={`Top participants by ${selected.label}`}
+    >
+      {ranked.map((row, index) => (
+        <div class="compact-column" role="listitem" data-chart-index={index}>
+          <div class="compact-track">
+            <div
+              class:list={['compact-bar', { 'compact-leading': row.rank === 1 }]}
+              style={`height:${peak > 0 ? Math.max(0, Math.min(100, (Number(row.values[selected.key]) / peak) * 100)) : 0}%`}
+            >
+              <div class="compact-bar-label">
+                <strong>{formatMetric(row.values[selected.key], selected)}</strong>
+                {row.rank !== null && row.rank <= 3 && (
+                  <svg
+                    class:list={['rank-trophy', `rank-trophy-${row.rank}`]}
+                    viewBox="0 0 24 24"
+                    role="img"
+                    aria-label={`Rank ${row.rank}`}
+                  >
+                    <path
+                      d="M5 4H2c0 3.7 1.4 6 5.3 7.1M19 4h3c0 3.7-1.4 6-5.3 7.1"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                    />
+                    <path d="M6 2h12v2h4c0 4.1-2 6.7-5.2 7.6-.8 1.8-2.1 3.1-3.8 3.8V19h3.3c.9 0 1.7.8 1.7 1.7v.6c0 .9-.8 1.7-1.7 1.7H7.7c-.9 0-1.7-.8-1.7-1.7v-.6c0-.9.8-1.7 1.7-1.7H11v-3.6c-1.7-.7-3-2-3.8-3.8C4 10.7 2 8.1 2 4h4V2Z" />
+                  </svg>
+                )}
+              </div>
+            </div>
+          </div>
+          <strong class="compact-operator">#{row.operatorNumber}</strong>
+          <span class="compact-rank">Rank {row.rank}</span>
+        </div>
+      ))}
+    </div>
+  )}
+  <button
+    class="overflow-toggle"
+    type="button"
+    aria-expanded="false"
+    aria-controls="compact-overflow-table"
+    hidden
+  ></button>
+  <div id="compact-overflow-table" class="compact-overflow">
+    <p class="overflow-heading">More competitors</p>
+    <div class="compact-table-wrap">
+      <table class="compact-table">
+        <thead>
+          <tr>
+            <th class="rank">RANK</th>
+            <th>{board.identifierLabel}</th>
+            {metrics.map((metric) => (
+              <th class="number">
+                <a
+                  data-board-link
+                  href={`${base}?${new URLSearchParams({ ...query, item: board.selectedItem || '', metric: metric.key, period })}`}
+                >
+                  {metric.label}
+                  {metric.key === selected.key ? (selected.direction === 'asc' ? ' ↑' : ' ↓') : ''}
+                </a>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr
+              data-chart-index={row.rank === null ? undefined : ranked.indexOf(row)}
+              class:list={{ 'first-place': row.rank === 1 }}
+            >
+              <td class="rank">{row.rank === null ? '—' : String(row.rank).padStart(2, '0')}</td>
+              <td>
+                <strong>#{row.operatorNumber}</strong>
+              </td>
+              {metrics.map((metric) => (
+                <td class="number">
+                  <strong>{formatMetric(row.values[metric.key], metric)}</strong>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<style>
+  [hidden] {
+    display: none !important;
+  }
+  .compact-standings {
+    display: flow-root;
+  }
+  .compact-vertical-chart {
+    --column-width: 88px;
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+    padding: 0;
+    margin: 0 18px 12px;
+  }
+  .compact-column {
+    flex: 1 1 var(--column-width);
+    min-width: var(--column-width);
+    max-width: 140px;
+    text-align: center;
+    padding-top: 44px;
+  }
+  .compact-track {
+    height: var(--track-height, 150px);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    box-shadow: 0 1px var(--compact-border);
+  }
+  .compact-bar {
+    position: relative;
+    width: 64%;
+    background: #9ab9d3;
+    border-radius: 4px 4px 0 0;
+  }
+  .compact-leading {
+    background: #1a5993;
+  }
+  .compact-bar-label {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    padding-bottom: 6px;
+    width: var(--column-width);
+  }
+  .compact-bar-label strong {
+    font-size: 12px;
+    line-height: 16px;
+    overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
+  }
+  .compact-bar-label svg {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+  }
+  .compact-operator {
+    display: block;
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 16px;
+    overflow-wrap: anywhere;
+  }
+  .compact-rank {
+    display: block;
+    margin-top: 2px;
+    font-size: 10px;
+    line-height: 14px;
+    color: var(--compact-muted);
+  }
+  .compact-overflow {
+    border-top: 1px solid var(--compact-border);
+  }
+  .overflow-heading {
+    margin: 0;
+    padding: 7px 18px;
+    font-size: 10px;
+    line-height: 14px;
+  }
+  .compact-table-wrap {
+    overflow: auto;
+  }
+  .compact-table th {
+    padding: 6px 18px;
+    font-size: 9px;
+  }
+  .compact-table td {
+    padding: 4px 18px;
+    height: 26px;
+    font-size: 11px;
+    line-height: 17px;
+  }
+  .compact-table .rank {
+    width: 70px;
+    text-align: center;
+    color: var(--compact-muted);
+  }
+  .compact-table .number {
+    text-align: right;
+  }
+  .overflow-toggle {
+    display: block;
+    width: calc(100% - 36px);
+    margin: 0 18px 10px;
+    padding: 9px 12px;
+    border: 1px solid var(--compact-border);
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    text-align: center;
+    font: inherit;
+    font-size: 11px;
+  }
+  .overflow-toggle:hover {
+    background: #eaf1f7;
+  }
+  :global(:root[data-theme='dark']) .overflow-toggle:hover {
+    background: #10283e;
+  }
+  @media (max-width: 760px) {
+    .compact-vertical-chart {
+      --column-width: 74px;
+      gap: 12px;
+    }
+  }
+</style>

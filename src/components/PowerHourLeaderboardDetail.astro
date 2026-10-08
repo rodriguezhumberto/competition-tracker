@@ -1,0 +1,98 @@
+---
+interface Score {
+  userId: number;
+  name: string;
+  clicks: number;
+  flagged: boolean;
+}
+
+interface Props {
+  scores: Score[];
+  metricLabel: string;
+}
+
+const { scores, metricLabel } = Astro.props;
+const leaderTotal = scores[0]?.clicks || 0;
+---
+
+<section class="rankings">
+  <div class="section-heading">
+    <div>
+      <span class="eyebrow">THE STANDINGS</span>
+      <h2>Power Hour results.</h2>
+    </div>
+    <span class="pill">{scores.length} participants</span>
+  </div>
+  {scores.length ? (
+    <div class="table-wrap">
+      <table class="leaderboard-table">
+        <thead>
+          <tr>
+            <th class="rank-col">RANK</th>
+            <th class="operator-col">PARTICIPANT</th>
+            <th class="score-col">{metricLabel.toUpperCase()}</th>
+            <th class="progress-col">TO THE LEADER</th>
+          </tr>
+        </thead>
+        <tbody>
+          {scores.map((score, index) => {
+            const rank = index + 1;
+            return (
+              <tr class:list={{ 'first-place': rank === 1 && score.clicks > 0 }}>
+                <td class="rank-col">
+                  <span class="rank-number">
+                    {rank <= 3 ? (
+                      <svg
+                        class:list={['rank-trophy', `rank-trophy-${rank}`]}
+                        viewBox="0 0 24 24"
+                        aria-label={`${rank}${rank === 1 ? 'st' : rank === 2 ? 'nd' : 'rd'} place`}
+                        role="img"
+                      >
+                        <path
+                          d="M5 4H2c0 3.7 1.4 6 5.3 7.1M19 4h3c0 3.7-1.4 6-5.3 7.1"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2.5"
+                          stroke-linecap="round"
+                        />
+                        <path d="M6 2h12v2h4c0 4.1-2 6.7-5.2 7.6-.8 1.8-2.1 3.1-3.8 3.8V19h3.3c.9 0 1.7.8 1.7 1.7v.6c0 .9-.8 1.7-1.7 1.7H7.7c-.9 0-1.7-.8-1.7-1.7v-.6c0-.9.8-1.7 1.7-1.7H11v-3.6c-1.7-.7-3-2-3.8-3.8C4 10.7 2 8.1 2 4h4V2Z" />
+                      </svg>
+                    ) : (
+                      <span class="rank-trophy-spacer" aria-hidden="true"></span>
+                    )}
+                    {String(rank).padStart(2, '0')}
+                  </span>
+                </td>
+                <td class="operator-col">
+                  <strong>
+                    {score.name}
+                    {rank === 1 && score.clicks > 0 && <span class="leader-badge">LEADING</span>}
+                  </strong>
+                  {score.flagged && <small> · review entry rate</small>}
+                </td>
+                <td class="score-col">
+                  <strong>{score.clicks}</strong>
+                </td>
+                <td class="progress-col">
+                  <div class="rank-progress">
+                    <span
+                      style={`width:${leaderTotal > 0 ? Math.max(0, Math.min(100, (score.clicks / leaderTotal) * 100)) : 0}%`}
+                    ></span>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  ) : (
+    <div class="empty-state">No participants joined this Power Hour.</div>
+  )}
+  <div class="table-foot">
+    <span>
+      <span class="status-dot neutral"></span>Final Power Hour results
+    </span>
+    <span>Scores in {metricLabel}</span>
+  </div>
+</section>

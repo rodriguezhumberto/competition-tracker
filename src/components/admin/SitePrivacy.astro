@@ -1,0 +1,79 @@
+---
+import { getSitePrivacy } from '../../lib/site-access.ts';
+
+const privacy = getSitePrivacy();
+const message = Astro.url.searchParams.get('privacy');
+---
+
+<section class="panel full-panel site-privacy" id="site-privacy">
+  <div class="eyebrow">VIEWER ACCESS</div>
+  <h2>Site privacy</h2>
+  <p>
+    {privacy.enabled
+      ? 'The site is protected. Visitors need the viewer password to see competition data.'
+      : 'The site is public. Anyone can view competition data.'}{' '}
+    Public demos remain available with their separate sample data.
+  </p>
+  {message === 'saved' && (
+    <p class="notice" role="status">
+      Site privacy settings saved.
+    </p>
+  )}
+  {message === 'revoked' && (
+    <p class="notice" role="status">
+      All viewers have been signed out. Admin access is unchanged.
+    </p>
+  )}
+  <form action="/api/site-privacy" method="POST">
+    <input type="hidden" name="action" value="save" />
+    <label class="checkbox" for="site-private">
+      <input
+        id="site-private"
+        type="checkbox"
+        name="enabled"
+        value="true"
+        checked={privacy.enabled}
+      />
+      Require a password to view the site
+    </label>
+    <label for="site-password">
+      {privacy.passwordHash ? 'New viewer password' : 'Viewer password'}
+      <input
+        id="site-password"
+        name="password"
+        type="password"
+        autocomplete="new-password"
+        minlength="8"
+        maxlength="128"
+        aria-describedby="site-password-help"
+      />
+    </label>
+    <small id="site-password-help">
+      Use 8–128 characters.{' '}
+      {privacy.passwordHash
+        ? 'Leave blank to keep the current password. Changing it signs out existing viewers.'
+        : 'Set a password before enabling protection.'}{' '}
+      Viewer access lasts 12 hours and does not grant admin permissions.
+    </small>
+    <button class="button button-accent">Save site privacy</button>
+  </form>
+  {privacy.enabled && (
+    <form action="/api/site-privacy" method="POST">
+      <input type="hidden" name="action" value="revoke" />
+      <button class="button button-outline">Sign out all viewers</button>
+    </form>
+  )}
+</section>
+
+<style>
+  .site-privacy form {
+    max-width: 38rem;
+  }
+  .site-privacy .checkbox {
+    margin-bottom: 20px;
+  }
+  .site-privacy .checkbox input {
+    width: auto;
+    flex-shrink: 0;
+  }
+</style>

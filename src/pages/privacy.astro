@@ -1,0 +1,108 @@
+---
+import LegalLayout from '../layouts/LegalLayout.astro';
+const operator = process.env.SITE_OPERATOR_NAME?.trim() || 'Site operator';
+const email = process.env.PRIVACY_CONTACT_EMAIL?.trim();
+---
+
+<LegalLayout title="Privacy policy">
+  <h2>Who operates this site</h2>
+  <p>
+    {operator} operates this installation of Competition Tracker. It is an independent project; see
+    the <a href="/disclaimer">disclaimer</a>. This installation is operated in Texas, United States.
+    This policy describes how the application handles information. Hosting, backups, and
+    report-reading services are configured by the site operator.
+  </p>
+  <h2>Information we handle and why</h2>
+  <ul>
+    <li>Participant names, session membership, points, and review flags to run Power Hours.</li>
+    <li>
+      Operator or cashier numbers, report dates, metrics, and scores to calculate competition
+      standings.
+    </li>
+    <li>
+      Uploaded report images, processed copies, and extracted data to review and verify reports.
+    </li>
+    <li>
+      Access credentials and cookies to protect administrative controls, private sites, and
+      participant submissions.
+    </li>
+  </ul>
+  <p>
+    Reports may contain additional information visible in the image. Upload only information you are
+    authorized to share, and remove unrelated personal or customer information before uploading.
+    Automated extraction assists report entry; administrators review reports before saving them.
+  </p>
+  <h2>Who can see information</h2>
+  <p>
+    Names, operator numbers, scores, rankings, and archived results may be visible to anyone who can
+    access this site. If the administrator enables a viewer password, access is restricted to
+    signed-in viewers and administrators. Without that protection, standings and archives are
+    public. Report images are served through an administrator-only endpoint. People with access may
+    copy or export information they can view.
+  </p>
+  <h2>Report processing and hosting services</h2>
+  <p>
+    When a report is scanned, its processed image and extraction instructions are sent to the
+    image-reading service selected by the operator. This may run locally or be an external provider.
+    An external provider may process data in another country and has its own retention practices.
+    Ask the operator which provider is used before uploading sensitive information. Hosting
+    providers may also process technical information such as IP addresses and request logs to
+    operate and secure the service.
+  </p>
+  <h2>Cookies and browser storage</h2>
+  <p>
+    The application uses cookies for administrator and viewer sign-in, Power Hour participation, and
+    demo access. Administrator and viewer access expires after 12 hours. Production participant
+    cookies are session cookies; demo access cookies last up to two hours. Your theme preference is
+    saved in your browser until you change it or clear site storage. The application does not
+    include advertising trackers or third-party analytics scripts.
+  </p>
+  <h2>How long information is kept</h2>
+  <p>
+    Unsaved report drafts expire after 24 hours. Expired or discarded drafts and their image files
+    are queued for cleanup while the server is running; failed deletions are retried.
+  </p>
+  <p>
+    Saved proof images become inaccessible and due for deletion 15 days after the competition ends,
+    including original images, processed copies, and processing metadata. Identifiable competition
+    results, operator numbers, report data, and scores are deleted 30 days after the competition
+    ends. These periods start at the end of the final competition day in its configured timezone.
+  </p>
+  <p>
+    Power Hour names, scores, membership, and access credentials are deleted 30 days after the
+    session ends. If a Power Hour belongs to a competition, the period starts when both the session
+    and competition have ended. A participant's name is removed when it is no longer needed by
+    another retained session. Competition settings may remain after the results have been deleted.
+  </p>
+  <p>
+    Cleanup runs at server startup and every minute while the server is running. Overdue data is
+    cleaned up when the server next starts. Image deletions are queued and retried if they fail. A
+    shared image is retained while another unexpired report or draft still needs it. Archiving does
+    not delete information immediately or extend these retention periods.
+  </p>
+  <p>
+    Demo workspaces expire after two hours without activity that extends their lifetime and are
+    removed during workspace cleanup. Backups, hosting logs, downloaded exports, and copies held by
+    external report-reading services follow their own retention schedules; deleting a record from
+    this site does not automatically remove those copies.
+  </p>
+  <h2>Questions, corrections, and removal requests</h2>
+  <p>
+    {email ? (
+      <Fragment>
+        Contact <a href={`mailto:${email}`}>{email}</a>
+      </Fragment>
+    ) : (
+      'Contact the site administrator through the person who provided your access or organized the competition'
+    )}{' '}
+    to ask about your information, request a correction or deletion, or find out which hosting and
+    report-reading providers are used. Include the competition or session name and your participant
+    name or operator number so the relevant records can be located. Your legal rights and any
+    required retention depend on the applicable law and the circumstances of this installation.
+  </p>
+  <h2>Changes to this policy</h2>
+  <p>
+    Updates will appear on this page with a revised date. The operator should communicate material
+    changes to how participant information is used or shared.
+  </p>
+</LegalLayout>

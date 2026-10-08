@@ -1,0 +1,117 @@
+.demo-harness {
+  margin-bottom: 18px;
+  padding: 10px 14px;
+  border: 1px solid #dce5ed;
+  border-radius: 8px;
+  background: #fff;
+}
+.demo-harness-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.demo-harness-description {
+  color: #5b6f80;
+  font-size: 12px;
+}
+.demo-harness .button {
+  min-height: 34px;
+  padding: 7px 12px;
+  font-size: 12px;
+}
+.demo-harness-options {
+  margin-left: auto;
+}
+.demo-harness-options summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #1a5993;
+}
+.demo-harness-menu {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+}
+.demo-harness-options[open] {
+  flex-basis: 100%;
+  margin-left: 0;
+}
+.demo-harness .button-row {
+  flex-wrap: wrap;
+}
+.demo-harness [aria-pressed='true'] {
+  background: #e7f0f9;
+  border-color: #1a5993;
+}
+.demo-harness-invite {
+  display: grid;
+  grid-template-columns: 256px minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+}
+.demo-harness-qr {
+  margin: 0;
+  text-align: center;
+}
+.demo-harness-qr img {
+  display: block;
+  width: 256px;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  background: #fff;
+}
+.demo-harness-qr figcaption {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.demo-harness-invite-link {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.demo-harness-invite label {
+  flex: 1;
+  min-width: 0;
+}
+.demo-harness-invite input {
+  width: 100%;
+  margin-top: 6px;
+}
+:root[data-theme='dark'] .demo-harness {
+  background: #14212d;
+  border-color: #2c3d4d;
+}
+:root[data-theme='dark'] .demo-harness-description {
+  color: #a9bbcc;
+}
+:root[data-theme='dark'] .demo-harness-options summary {
+  color: #9cc9f3;
+}
+:root[data-theme='dark'] .demo-harness [aria-pressed='true'] {
+  background: #21384b;
+  border-color: #9cc9f3;
+}
+@media (max-width: 600px) {
+  .demo-harness {
+    padding: 10px;
+  }
+  .demo-harness-description {
+    flex: 1;
+  }
+  .demo-harness-bar > .button {
+    width: 100%;
+  }
+  .demo-harness-invite {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .demo-harness-qr {
+    justify-self: center;
+  }
+  .demo-harness-invite-link {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

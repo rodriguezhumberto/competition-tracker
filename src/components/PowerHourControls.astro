@@ -1,0 +1,29 @@
+---
+import Icon from './Icon.astro';
+---
+
+<div class="power-hour-controls">
+  <div class="power-hour-controls-main">
+    <div class="power-hour-personal">
+      <div class="eyebrow">
+        YOUR <span x-text="(session?.metric_label || 'POINTS').toUpperCase()"></span>
+      </div>
+      <strong class="my-score" x-text="myScore" aria-live="polite" aria-atomic="true"></strong>
+    </div>
+    <button
+      type="button"
+      class="tap-button"
+      x-on:click="tap()"
+      x-bind:disabled="ended || !connected || !confirmed || remaining === '00:00'"
+    >
+      <span class="tap-plus">+1</span>
+      <span>
+        <span x-text="'Add ' + (session?.metric_label || 'point')"></span> <Icon />
+      </span>
+    </button>
+  </div>
+  <p class="controls-status" x-show="!connected || !confirmed" role="status">
+    Reconnecting… Your counts are saved.
+  </p>
+  <p class="error" x-show="error" x-text="error" role="alert"></p>
+</div>

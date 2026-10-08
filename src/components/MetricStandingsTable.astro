@@ -1,0 +1,78 @@
+---
+import { formatMetric } from '../lib/metrics.ts';
+import type { leaderboard } from '../lib/competition-store.ts';
+import { zonedClock } from '../lib/report-time.ts';
+interface Props {
+  board: ReturnType<typeof leaderboard>;
+  base: string;
+  overflow?: boolean;
+  query?: Record<string, string>;
+}
+const { board, base, overflow = false, query = {} } = Astro.props;
+const { competition, metrics, selected, rows, period } = board;
+---
+
+<div
+  class:list={['table-wrap', { 'metric-overflow': overflow }]}
+  x-show={
+    overflow
+      ? `${rows.filter((row) => row.rank !== null).length} > capacity || ${rows.some((row) => row.rank === null)}`
+      : undefined
+  }
+>
+  <table class="leaderboard-table multi-metric-table">
+    <thead>
+      <tr>
+        <th class="rank-col">RANK</th>
+        <th>{board.identifierLabel}</th>
+        {metrics.map((m) => (
+          <th
+            class={m.key === selected.key ? 'score-col' : 'metric-col'}
+            aria-sort={
+              m.key === selected.key
+                ? m.direction === 'asc'
+                  ? 'ascending'
+                  : 'descending'
+                : undefined
+            }
+          >
+            <a
+              data-board-link
+              href={`${base}?${new URLSearchParams({ ...query, item: board.selectedItem || '', metric: m.key, period })}`}
+            >
+              {m.label}
+              {m.key === selected.key ? (m.direction === 'asc' ? ' ↑' : ' ↓') : ''}
+            </a>
+          </th>
+        ))}
+        <th class="updated-col">UPDATED</th>
+      </tr>
+    </thead>
+    <tbody>
+      {rows.map((row, index) => (
+        <tr
+          x-show={overflow ? (row.rank === null ? 'true' : `${index} >= capacity`) : undefined}
+          class:list={{ 'first-place': row.rank === 1 }}
+        >
+          <td class="rank-col">{row.rank === null ? '—' : String(row.rank).padStart(2, '0')}</td>
+          <td>
+            <strong>#{row.operatorNumber}</strong>
+          </td>
+          {metrics.map((m) => (
+            <td class={m.key === selected.key ? 'score-col' : 'metric-col'}>
+              <strong>{formatMetric(row.values[m.key], m)}</strong>
+            </td>
+          ))}
+          <td class="updated-col">
+            {zonedClock(competition.timezone, new Date(row.updated)).slice(0, 10)}
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+<style>
+  .metric-overflow {
+    margin-top: 24px;
+  }
+</style>

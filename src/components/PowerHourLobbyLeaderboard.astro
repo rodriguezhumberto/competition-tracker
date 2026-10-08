@@ -1,0 +1,48 @@
+<section class="live-ranks" aria-label="Live Power Hour standings">
+  <div class="lobby-board-heading">
+    <div>
+      <span class="eyebrow" x-text="ended ? 'THE RESULTS ARE IN' : 'THE RACE IS ON'"></span>
+      <h3 x-text="ended ? 'Final standings' : 'Live standings'"></h3>
+    </div>
+    <span class="pill" x-text="scores.length + ' participants'"></span>
+  </div>
+  <div class="lobby-board-meta">
+    <span
+      x-text="ended ? 'Final results' : connected ? 'Live updates' : 'Reconnecting · showing last counts'"
+      role="status"
+    ></span>
+    <span x-text="'Scale: 0–' + scaleCeiling + ' ' + (session?.metric_label || 'points')"></span>
+  </div>
+  <ol class="lobby-rank-list">
+    <template x-for="(person,index) in scores" x-bind:key="person.userId">
+      <li
+        class="lobby-rank-row"
+        x-bind:class="{ 'is-you': person.userId === userId, 'is-leading': index === 0 && person.clicks > 0, 'score-changed': changedIds.includes(person.userId) }"
+      >
+        <div class="lobby-row-label">
+          <span class="lobby-rank" x-text="String(index+1).padStart(2,'0')"></span>
+          <b class="lobby-name" x-text="person.name"></b>
+          <span class="lobby-you" x-show="person.userId === userId">
+            You
+          </span>
+          <span
+            class="lobby-leader"
+            x-show="index === 0 && person.clicks > 0"
+            aria-label="Leading"
+            title="Leading"
+          >
+            ★
+          </span>
+          <strong class="lobby-count" x-text="person.clicks"></strong>
+          <span class="sr-only" x-text="session?.metric_label"></span>
+        </div>
+        <div class="lobby-bar-track" aria-hidden="true">
+          <span
+            class="lobby-bar-fill"
+            x-bind:style="'transform: scaleX(' + Math.min(1, person.clicks / scaleCeiling) + ')'"
+          ></span>
+        </div>
+      </li>
+    </template>
+  </ol>
+</section>

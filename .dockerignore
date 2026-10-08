@@ -1,0 +1,18 @@
+# Only send application inputs to the builder. Local secrets, databases,
+# backups, dependencies, and generated output stay out of the build context.
+**
+!Dockerfile
+!.dockerignore
+!package.json
+!package-lock.json
+!astro.config.mjs
+!tsconfig.json
+!server.mjs
+!src/
+!src/**
+!public/
+!public/**
+!scripts/
+!scripts/**
+!drizzle/
+!drizzle/**

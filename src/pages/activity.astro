@@ -1,0 +1,98 @@
+---
+import { itemFilterErrorResponse } from '../lib/leaderboard.ts';
+import Layout from '../layouts/Layout.astro';
+import { currentCompetition, leaderboard } from '../lib/competition-store.ts';
+import { formatMetric } from '../lib/metrics.ts';
+import { zonedClock } from '../lib/report-time.ts';
+
+const competition = currentCompetition();
+const requestedPage = Number(Astro.url.searchParams.get('page') || 1);
+const page =
+  Number.isSafeInteger(requestedPage) && requestedPage >= 1 && requestedPage <= 100000
+    ? requestedPage
+    : 1;
+let board;
+try {
+  board = competition
+    ? leaderboard(competition.id, {
+        metric: Astro.url.searchParams.get('metric'),
+        period: Astro.url.searchParams.get('period'),
+        item: Astro.url.searchParams.get('item'),
+        activityLimit: 20,
+        activityOffset: (page - 1) * 20,
+      })
+    : null;
+} catch (error) {
+  const response = itemFilterErrorResponse(error, Astro.url);
+  if (response) return response;
+  throw error;
+}
+
+const view = board
+  ? new URLSearchParams({
+      metric: board.selected.key,
+      period: board.period,
+      ...(board.selectedItem ? { item: board.selectedItem } : {}),
+    }).toString()
+  : '';
+---
+
+<Layout title="Report activity">
+  <a href={`/?${view}`}>← Back to leaderboard</a>
+  <div class="page-heading">
+    <div>
+      <h1>Report activity</h1>
+      <p>{competition?.name}</p>
+    </div>
+  </div>
+  {board && (
+    <section class="panel">
+      <h2>
+        {board.selected.label}
+        {board.multipleItems
+          ? ` · ${board.selectedItem ? board.items.find((item) => item.code === board.selectedItem)?.name : 'All items'}`
+          : ''}
+      </h2>
+      <p>
+        {board.period === 'day'
+          ? 'Today'
+          : board.period === 'week'
+            ? 'This week'
+            : 'Full competition'}{' '}
+        · {board.competition.timezone}
+      </p>
+      {board.updates.map((update) => (
+        <div class="activity-item">
+          <div>
+            <strong>#{update.operatorNumber}</strong>
+            {board.multipleItems && <span> · {update.itemName}</span>}
+            <p>
+              {board.selected.mode === 'latest' ? 'Latest value recorded' : 'Report contribution'}
+              <small>
+                {zonedClock(board.competition.timezone, new Date(update.timestamp)).replace(
+                  'T',
+                  ' ',
+                )}
+              </small>
+            </p>
+          </div>
+          <b>{formatMetric(update.amount, board.selected)}</b>
+        </div>
+      ))}
+      {!board.updates.length && <p>No reports on this page.</p>}
+      <div class="button-row" aria-label="Activity pages">
+        {page > 1 && (
+          <a class="button button-outline" href={`/activity?${view}&page=${page - 1}`}>
+            Newer reports
+          </a>
+        )}
+        {board.hasMoreUpdates && (
+          <a class="button button-outline" href={`/activity?${view}&page=${page + 1}`}>
+            Older reports
+          </a>
+        )}
+      </div>
+    </section>
+  )}
+  {!board && <p>No active competition.</p>}
+</Layout>

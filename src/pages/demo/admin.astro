@@ -1,0 +1,162 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Icon from '../../components/Icon.astro';
+import PowerHourLiveLeaderboard from '../../components/admin/PowerHourLiveLeaderboard.astro';
+import RecentReports from '../../components/admin/RecentReports.astro';
+import NewCompetitionForm from '../../components/admin/NewCompetitionForm.astro';
+import CompetitionList from '../../components/admin/CompetitionList.astro';
+import { getCompetitionConfigurations, recentMetricReports } from '../../lib/competition-store.ts';
+import { centralDate } from '../../lib/central-time.ts';
+import { requireDemo, demoState, demoLink } from '../../lib/demo-access.ts';
+import { withDemo } from '../../lib/demo-workspaces.ts';
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+let state;
+let error = '';
+let recent: ReturnType<typeof recentMetricReports> = [];
+let competitions: ReturnType<typeof getCompetitionConfigurations> = [];
+const query: Record<string, string> = {};
+for (const key of ['room', 'invite']) {
+  const value = Astro.url.searchParams.get(key);
+  if (value !== null) query[key] = value;
+}
+try {
+  const { id, owner } = requireDemo(Astro.cookies, Astro.url, Astro.clientAddress, true);
+  if (!owner)
+    throw new Error(
+      'Only the demo owner can open the admin portal. Join the Power Hour from the leaderboard.',
+    );
+  state = demoState(id, owner, Astro.cookies, Astro.url);
+  recent = withDemo(id, recentMetricReports);
+  competitions = withDemo(id, getCompetitionConfigurations);
+} catch (cause) {
+  Astro.response.status = 403;
+  error = cause instanceof Error ? cause.message : 'Unable to load this demo.';
+}
+const session = state?.session?.status === 'active' ? state.session : null;
+const scheduledEnd = session
+  ? new Date(session.ends_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+  : '';
+---
+
+{state ? (
+  <AdminLayout demo={state}>
+    {Astro.url.searchParams.get('error') && (
+      <p class="error" role="alert">
+        {Astro.url.searchParams.get('error')}
+      </p>
+    )}
+    {Astro.url.searchParams.has('success') && (
+      <p class="notice" role="status">
+        Saved. Your demo is up to date.
+      </p>
+    )}
+    <section
+      class="power-hour-admin"
+      id="power-hour"
+      x-data={`demoToolbar(${JSON.stringify(state)})`}
+    >
+      <div>
+        <h2>{session ? session.name + ' is live.' : 'Start a Power Hour'}</h2>
+        <p>
+          {session
+            ? `Tracking ${session.metric_label || 'points'}. Scheduled to end ${scheduledEnd}. Add time whenever you need to.`
+            : 'Start a five-minute Power Hour and invite your audience to compete alongside eight simulated participants.'}
+        </p>
+        <p class="error" role="alert" x-show="error" x-text="error" x-cloak></p>
+      </div>
+      {session ? (
+        <div>
+          <form x-on:submit.prevent="action('extend', {minutes: Number($refs.extendMinutes.value)})">
+            <label for="extend-minutes">
+              Add minutes
+              <input
+                id="extend-minutes"
+                name="duration_minutes"
+                x-ref="extendMinutes"
+                type="number"
+                min="1"
+                max="1440"
+                step="1"
+                value="15"
+                required
+              />
+            </label>
+            <button class="button button-accent" x-bind:disabled="busy">
+              Add time{' '}
+              <span>
+                <Icon />
+              </span>
+            </button>
+          </form>
+          <form x-on:submit.prevent="action('end')">
+            <button class="button button-accent" x-bind:disabled="busy">
+              End &amp; archive{' '}
+              <span>
+                <Icon />
+              </span>
+            </button>
+          </form>
+        </div>
+      ) : (
+        <form x-on:submit.prevent="action('start')">
+          <label for="power-hour-name">
+            Power Hour name
+            <input id="power-hour-name" value="Demo Power Hour" readonly />
+          </label>
+          <label for="power-hour-metric">
+            What are you tracking?
+            <input id="power-hour-metric" value="points" readonly />
+          </label>
+          <label for="power-hour-duration">
+            Duration (minutes)
+            <input id="power-hour-duration" type="number" value="5" readonly />
+          </label>
+          <button class="button button-accent" x-bind:disabled="busy">
+            Start Power Hour <span>ϟ</span>
+          </button>
+        </form>
+      )}
+    </section>
+    {session && (
+      <PowerHourLiveLeaderboard
+        sessionId={session.id}
+        metricLabel={session.metric_label || 'points'}
+        scores={state.scores}
+        controller={`demoAdminLeaderboard(${JSON.stringify({ sessionId: session.id, metricLabel: session.metric_label || 'points', initialScores: state.scores })})`}
+      />
+    )}
+    <div class="admin-grid" style="grid-template-columns: minmax(0, 1fr)">
+      <NewCompetitionForm
+        templates={competitions}
+        today={centralDate()}
+        hasActiveCompetition={competitions.some((c) => c.is_active)}
+        saveUrl={demoLink('/api/demo/competition', Astro.url)}
+        successBase={demoLink('/demo/competitions', Astro.url)}
+        allowSample={false}
+      />
+    </div>
+    <CompetitionList
+      competitions={competitions}
+      base="/demo/competitions"
+      activateUrl={demoLink('/api/demo/activate', Astro.url)}
+      query={query}
+    />
+    <RecentReports recent={recent} />
+  </AdminLayout>
+) : (
+  <Layout title="Demo unavailable">
+    <section class="panel">
+      <h1>This demo is unavailable</h1>
+      <p class="error" role="alert">
+        {error}
+      </p>
+      <a class="button button-outline" href={demoLink('/demo', Astro.url)}>
+        Back to leaderboard
+      </a>
+      <a class="button button-accent" href="/demo">
+        Start your own demo
+      </a>
+    </section>
+  </Layout>
+)}

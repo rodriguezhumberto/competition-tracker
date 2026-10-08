@@ -1,0 +1,108 @@
+---
+import { itemFilterErrorResponse } from '../../../lib/leaderboard.ts';
+import Layout from '../../../layouts/Layout.astro';
+import CompetitionBoard from '../../../components/CompetitionBoard.astro';
+import CompetitionEditor from '../../../components/admin/CompetitionEditor.astro';
+import { getCompetitionForEditing, leaderboard } from '../../../lib/competition-store.ts';
+import { centralDate } from '../../../lib/central-time.ts';
+import { requireDemo, demoState, demoLink } from '../../../lib/demo-access.ts';
+import { withDemo } from '../../../lib/demo-workspaces.ts';
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+const id = Number(Astro.params.id);
+if (!Number.isSafeInteger(id) || id <= 0)
+  return new Response('Competition not found.', { status: 404 });
+let state;
+let error = '';
+let competition;
+let board;
+try {
+  const room = requireDemo(Astro.cookies, Astro.url, Astro.clientAddress, true);
+  if (!room.owner) throw new Error('Only the demo owner can manage competitions.');
+  // Workspace state describes the active competition; this page may show another board.
+  const stateUrl = new URL(Astro.url);
+  stateUrl.searchParams.delete('item');
+  state = demoState(room.id, room.owner, Astro.cookies, stateUrl);
+  const loaded = withDemo(room.id, () => {
+    const competition = getCompetitionForEditing(id);
+    return {
+      competition,
+      board: leaderboard(id, {
+        competition,
+        audience: 'admin',
+        metric: Astro.url.searchParams.get('metric'),
+        period: Astro.url.searchParams.get('period'),
+        item: Astro.url.searchParams.get('item'),
+      }),
+    };
+  });
+  competition = loaded.competition;
+  board = loaded.board;
+} catch (cause) {
+  const response = itemFilterErrorResponse(cause, Astro.url);
+  if (response) return response;
+  Astro.response.status = state ? 404 : 403;
+  error = cause instanceof Error ? cause.message : 'Unable to load this demo.';
+}
+const query: Record<string, string> = {};
+for (const key of ['room', 'invite']) {
+  const value = Astro.url.searchParams.get(key);
+  if (value !== null) query[key] = value;
+}
+---
+
+<Layout title={competition?.name || 'Competition'} active="competitions" demo={state}>
+  {state && competition && board ? (
+    <>
+      <div class="page-heading">
+        <div>
+          <a class="competition-back" href={demoLink('/demo/competitions', Astro.url)}>
+            ← All competitions
+          </a>
+          <h1>
+            {competition.name}
+            <span class="accent-dot">.</span>
+          </h1>
+          <p>Admin dashboard · Includes private metrics</p>
+        </div>
+        <a class="button button-outline" href={demoLink('/demo/admin', Astro.url)}>
+          Back to admin
+        </a>
+      </div>
+      {Astro.url.searchParams.has('saved') && (
+        <p class="notice" role="status">
+          Competition settings saved.
+        </p>
+      )}
+      <CompetitionBoard
+        board={board}
+        admin
+        base={`/demo/competitions/${id}`}
+        query={query}
+        exportBase={null}
+      />
+      <details class="competition-settings">
+        <summary>Edit metrics & report mapping</summary>
+        <CompetitionEditor
+          initial={competition}
+          today={centralDate()}
+          saveUrl={demoLink('/api/demo/competition', Astro.url)}
+          successBase={demoLink('/demo/competitions', Astro.url)}
+          allowSample={false}
+        />
+      </details>
+    </>
+  ) : (
+    <section class="panel">
+      <h1>{state ? 'Competition unavailable' : 'This demo is unavailable'}</h1>
+      <p class="error" role="alert">
+        {error}
+      </p>
+      <a class="button button-outline" href={demoLink('/demo/competitions', Astro.url)}>
+        All competitions
+      </a>
+      <a class="button button-accent" href="/demo">
+        Start your own demo
+      </a>
+    </section>
+  )}
+</Layout>

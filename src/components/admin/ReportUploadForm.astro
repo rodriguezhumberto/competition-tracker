@@ -1,0 +1,217 @@
+---
+import type { getCompetitions } from '../../lib/store.ts';
+import ReportImagePreview from './ReportImagePreview.astro';
+import { listPendingDrafts } from '../../lib/draft-store.ts';
+import ReportFields from './ReportFields.astro';
+interface Props {
+  competitions: ReturnType<typeof getCompetitions>;
+}
+const { competitions } = Astro.props;
+const drafts = listPendingDrafts();
+---
+
+<section
+  data-competition-admin
+  class="panel report-upload"
+  x-data={`reportUpload(${JSON.stringify(drafts)})`}
+>
+  <h2>Scan a batch progress report</h2>
+  <p>
+    Extract your configured metrics, review the values alongside the image, then confirm to save.
+  </p>
+  <div class="pending-drafts" x-show="!report">
+    <h3>Pending drafts</h3>
+    <p x-show="!drafts.length">No pending drafts.</p>
+    <ul>
+      <template x-for="draft in drafts" x-bind:key="draft.token">
+        <li>
+          <button
+            type="button"
+            class="text-button"
+            x-on:click="reopen(draft.token)"
+            x-bind:disabled="busy"
+            x-text="'Resume '+draft.competitionName"
+          ></button>
+          <small x-text="' · Expires '+centralReportTime(new Date(draft.expiresAt).toISOString())"></small>
+        </li>
+      </template>
+    </ul>
+  </div>
+  <form x-on:submit.prevent="upload($event)" x-show="!report">
+    <label>
+      Competition
+      <select name="competition_id" required>
+        <option value="">Choose a competition</option>
+        {competitions.map((c) => (
+          <option value={c.id} selected={c.is_active}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+    </label>
+    <label class="dropzone">
+      <strong x-text="filename || 'Choose a report image'">Choose a report image</strong>
+      <small>PNG, JPEG or WebP · up to 5 MB</small>
+      <input
+        name="report"
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        required
+        x-on:change="selectImage($event)"
+        x-bind:disabled="busy"
+      />
+    </label>
+    <p
+      role="status"
+      aria-label="Report image selection"
+      aria-live="polite"
+      x-show="file"
+      x-text="imageLoading ? 'Preparing '+filename+'…' : detectingOrientation ? 'Checking orientation of '+filename+'…' : filename+' selected. Ready to scan.'"
+      x-cloak
+    ></p>
+    <ReportImagePreview />
+    <button
+      class="button button-accent"
+      x-bind:disabled="busy || !file || imageLoading || detectingOrientation || cropping || !imagePreview"
+      x-text="busy ? 'Reading your report…' : 'Scan & preview'"
+    >
+      Scan &amp; preview
+    </button>
+  </form>
+  <template x-if="report">
+    <form class="report-preview" x-on:submit.prevent="confirm()">
+      <h3>Review extracted report</h3>
+      <p>
+        Correct missing or misread fields. Save draft to keep edits for later; scores change only
+        after confirmation.
+      </p>
+      <p x-text="'Expires '+centralReportTime(new Date(expiresAt).toISOString())"></p>
+      <p class="error" role="alert" x-show="schemaChanged">
+        Competition settings changed. Discard this draft and scan the report again.
+      </p>
+      <details class="original-extraction">
+        <summary>Original extracted values</summary>
+        <p x-text="'Generated: '+(originalReport?.generated_at || 'Unreadable')+' · Period: '+(originalReport?.period_start || 'Unreadable')+' to '+(originalReport?.period_end || 'Unreadable')"></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th x-text="identifierLabel"></th>
+                <template x-for="metric in metrics" x-bind:key="metric.key">
+                  <th x-text="metric.label"></th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(row,index) in originalReport?.rows || []" x-bind:key="index">
+                <tr>
+                  <td x-text="row.participant_id || 'Unreadable'"></td>
+                  <template x-for="metric in metrics" x-bind:key="metric.key">
+                    <td x-text="row.values[metric.key] ?? 'Unreadable'"></td>
+                  </template>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </details>
+      <details class="proof-preview" open>
+        <summary>Image used for extraction</summary>
+        <a
+          x-bind:href="'/api/proof?draft='+token+'&variant=processed'"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <img
+            x-bind:src="'/api/proof?draft='+token+'&variant=processed'"
+            alt="Processed report for comparison with extracted values"
+          />
+        </a>
+      </details>
+      <p>
+        <a x-bind:href="'/api/proof?draft='+token" target="_blank" rel="noreferrer">
+          View original report
+        </a>
+      </p>
+      <div x-show="multipleItems" x-cloak>
+        <p x-text="'Detected report code: '+(detectedItemCode || 'Unreadable or missing')"></p>
+        <p class="notice" x-show="needsItemSelection">
+          Choose the correct tracked item before confirming this report.
+        </p>
+      </div>
+      <ReportFields />
+      <div class="setup-field" x-show="multipleItems" x-cloak>
+        <button
+          type="button"
+          class="text-button"
+          x-on:click="addingItem=!addingItem;newItem.code=detectedItemCode"
+          x-bind:disabled="busy || schemaChanged"
+        >
+          Add a new tracked item
+        </button>
+        <fieldset x-show="addingItem" x-cloak>
+          <legend>New tracked item</legend>
+          <div class="form-row">
+            <label>
+              Item name <input x-model="newItem.name" maxlength="80" />
+            </label>
+            <label>
+              Report code <input x-model="newItem.code" maxlength="80" />
+            </label>
+          </div>
+          <button
+            type="button"
+            class="button button-outline"
+            x-on:click="addTrackedItem()"
+            x-bind:disabled="busy || schemaChanged || !newItem.name.trim() || !newItem.code.trim()"
+          >
+            Add item to competition
+          </button>
+          <small>
+            Adds this item to the competition and retains your report edits. Review again before
+            confirming.
+          </small>
+        </fieldset>
+      </div>
+      <label class="checkbox">
+        <input type="checkbox" x-model="reviewed" required />I checked the dates and values against
+        the source report.
+      </label>
+      <div class="button-row">
+        <button
+          class="button button-outline"
+          type="button"
+          x-on:click="saveDraft()"
+          x-bind:disabled="busy || schemaChanged"
+        >
+          Save draft
+        </button>
+        <button
+          class="button button-outline"
+          type="button"
+          x-on:click="closeDraft()"
+          x-bind:disabled="busy"
+        >
+          Close without saving
+        </button>
+        <button
+          class="button button-accent"
+          x-bind:disabled="busy || !reviewed || schemaChanged || needsItemSelection"
+          x-text="busy ? 'Saving…' : 'Confirm & save report'"
+        >
+          Confirm &amp; save report
+        </button>
+        <button
+          class="button button-outline"
+          type="button"
+          x-on:click="discard()"
+          x-bind:disabled="busy"
+        >
+          Discard preview
+        </button>
+      </div>
+    </form>
+  </template>
+  <p class="error" x-show="error" x-text="error" role="alert" x-cloak></p>
+  <p class="notice" x-show="message" x-text="message" role="status" x-cloak></p>
+</section>

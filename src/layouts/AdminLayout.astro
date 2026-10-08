@@ -1,0 +1,57 @@
+---
+import Icon from '../components/Icon.astro';
+import Layout from './Layout.astro';
+import { isAdmin } from '../lib/auth.ts';
+import { demoLink, type DemoState } from '../lib/demo-access.ts';
+interface Props {
+  demo?: DemoState;
+}
+const { demo } = Astro.props;
+if (demo?.role === 'audience')
+  return new Response('Only the demo host can use admin controls.', { status: 403 });
+if (!demo && !isAdmin(Astro.cookies)) return Astro.redirect('/admin/login');
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+---
+
+<Layout title="Admin portal" active="admin" demo={demo}>
+  <div class="page-heading">
+    <div>
+      <h1>Admin</h1>
+    </div>
+    {demo ? (
+      <a class="button button-outline" href={demoLink('/demo', Astro.url)}>
+        Back to leaderboard <Icon />
+      </a>
+    ) : (
+      <div class="button-row">
+        {process.env.DEMO_ENABLED !== 'false' && (
+          <form action="/api/demo/launch" method="POST">
+            <button class="button button-outline">
+              Launch demo <Icon />
+            </button>
+          </form>
+        )}
+        <form action="/api/admin" method="POST">
+          <input type="hidden" name="action" value="logout" />
+          <button class="button button-outline">
+            Sign out <Icon />
+          </button>
+        </form>
+      </div>
+    )}
+  </div>
+  <slot />
+</Layout>
+
+<style>
+  .button-row {
+    flex-wrap: nowrap;
+  }
+
+  @media (max-width: 640px) {
+    .page-heading {
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+  }
+</style>

@@ -1,0 +1,67 @@
+---
+import Icon from '../../../components/Icon.astro';
+import Layout from '../../../layouts/Layout.astro';
+import PowerHourLeaderboardDetail from '../../../components/PowerHourLeaderboardDetail.astro';
+import { expireSessions, getArchivedSession, sessionScores } from '../../../lib/store.ts';
+
+const id = Astro.params.id;
+if (!id || !/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id))) {
+  return new Response('Power Hour not found.', { status: 404 });
+}
+import { requireDemo, demoState, demoLink } from '../../../lib/demo-access.ts';
+import { withDemo } from '../../../lib/demo-workspaces.ts';
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+let state;
+let error = '';
+let session: ReturnType<typeof getArchivedSession>;
+let scores: ReturnType<typeof sessionScores> = [];
+try {
+  const access = requireDemo(Astro.cookies, Astro.url, Astro.clientAddress, true);
+  state = demoState(access.id, access.owner, Astro.cookies, Astro.url);
+  const result = withDemo(access.id, () => {
+    expireSessions();
+    const archived = getArchivedSession(Number(id));
+    return { session: archived, scores: archived ? sessionScores(archived.id) : [] };
+  });
+  session = result.session;
+  scores = result.scores;
+  if (!session) return new Response('Power Hour not found.', { status: 404 });
+} catch (cause) {
+  Astro.response.status = 403;
+  error = cause instanceof Error ? cause.message : 'Unable to load this demo.';
+}
+---
+
+<Layout title={session?.name || 'Power Hour archive'} active="archive" demo={state}>
+  {state && session ? (
+    <>
+      <div class="page-heading">
+        <div>
+          <a class="competition-back" href={demoLink('/demo/archive', Astro.url)}>
+            <Icon name="arrow-left" /> Power Hour archive
+          </a>
+          <h1>
+            {session.name}
+            <span class="accent-dot">.</span>
+          </h1>
+          <p>
+            Power Hour · {new Date(session.created_at).toLocaleString('en-US', { timeZone: 'UTC' })}{' '}
+            UTC · Tracking {session.metric_label || 'points'}
+          </p>
+        </div>
+        <span class="pill">Archived</span>
+      </div>
+      <PowerHourLeaderboardDetail scores={scores} metricLabel={session.metric_label || 'points'} />
+    </>
+  ) : (
+    <section class="panel">
+      <h1>This demo is unavailable</h1>
+      <p class="error" role="alert">
+        {error}
+      </p>
+      <a class="button button-accent" href="/demo">
+        Start your own demo
+      </a>
+    </section>
+  )}
+</Layout>

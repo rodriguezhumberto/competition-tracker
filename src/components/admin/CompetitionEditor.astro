@@ -1,0 +1,593 @@
+---
+import ReportImagePreview from './ReportImagePreview.astro';
+import type { getCompetition } from '../../lib/competition-store.ts';
+interface Props {
+  initial?: ReturnType<typeof getCompetition> | null;
+  templates?: ReturnType<typeof getCompetition>[];
+  today: string;
+  activate?: boolean;
+  saveUrl?: string;
+  successBase?: string;
+  allowSample?: boolean;
+}
+const {
+  initial = null,
+  templates = [],
+  today,
+  activate = false,
+  saveUrl = '/api/competition',
+  successBase = '/competitions',
+  allowSample = true,
+} = Astro.props;
+---
+
+<section
+  data-competition-admin
+  class="panel competition-editor"
+  x-data={`competitionEditor(${JSON.stringify(initial)},${JSON.stringify(templates)},${JSON.stringify(today)},${activate},${JSON.stringify({ saveUrl, successBase, allowSample })})`}
+>
+  <div class="eyebrow">{initial ? 'COMPETITION SETTINGS' : 'SET THE CHALLENGE'}</div>
+  <h2>{initial ? 'Metrics & report mapping' : 'New competition'}</h2>
+  <p>
+    {initial
+      ? 'Change presentation, add metrics deliberately, or update how reports map to your existing metrics.'
+      : 'Define your data once. Reports, entry forms and leaderboards will follow your rules.'}
+  </p>
+  <noscript>
+    <p class="error">Enable JavaScript to configure competition metrics.</p>
+  </noscript>
+  <div class="setup-steps" aria-label="Setup progress">
+    {!initial && <span x-bind:class="{'current':step===1}">1 · Details</span>}
+    <span x-bind:class="{'current':step===2}">2 · Data</span>
+    <span x-bind:class="{'current':step===3}">3 · Leaderboard</span>
+    <span x-bind:class="{'current':step===4}">4 · Review</span>
+  </div>
+  <form x-on:submit.prevent="save()">
+    <div class="setup-step" x-show="step===1" style={initial ? 'display:none' : undefined}>
+      <label>
+        Competition name
+        <input x-model="name" maxlength="80" />
+      </label>
+      <div class="form-row">
+        <label>
+          Start date
+          <span class="date-input-wrap">
+            <input type="date" x-model="start_date" />
+          </span>
+        </label>
+        <label>
+          End date
+          <span class="date-input-wrap">
+            <input type="date" x-model="end_date" />
+          </span>
+        </label>
+      </div>
+      <div class="setup-field">
+        <label>
+          Report timezone
+          <input x-model="timezone" list="report-timezones" placeholder="America/Chicago" />
+        </label>
+        <datalist id="report-timezones">
+          <option value="America/Chicago" />
+          <option value="America/New_York" />
+          <option value="America/Denver" />
+          <option value="America/Los_Angeles" />
+          <option value="UTC" />
+        </datalist>
+        <small>Used for report clocks without an offset and the day/week leaderboards.</small>
+      </div>
+      <label class="checkbox">
+        <input type="checkbox" x-model="is_active" />
+        Make this the active competition
+      </label>
+    </div>
+    <div class="setup-step" x-show="step===2" x-cloak>
+      {!initial && (
+        <div class="schema-source">
+          {templates.length > 0 && (
+            <label>
+              Reuse a competition template
+              <select x-model="template" x-on:change="useTemplate()">
+                <option value="">Start from scratch</option>
+                {templates.map((c) => (
+                  <option value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          {allowSample ? (
+            <>
+              <label>
+                Sample report (optional)
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  x-on:change="selectImage($event)"
+                  x-bind:disabled="busy"
+                />
+              </label>
+              <ReportImagePreview />
+              <button
+                type="button"
+                class="button button-outline"
+                x-on:click="discover()"
+                x-bind:disabled="!file || busy || imageLoading || detectingOrientation || cropping || !imagePreview"
+              >
+                <span x-text="busy ? 'Reading sample…' : 'Suggest columns from sample'">
+                  Suggest columns from sample
+                </span>
+              </button>
+              <p>
+                Or define the columns below. A sample suggests a structure and never adds scores.
+              </p>
+            </>
+          ) : (
+            <p>
+              Define columns below or reuse a template. Sample-image discovery is unavailable in
+              this demo.
+            </p>
+          )}
+        </div>
+      )}
+      <label class="checkbox">
+        <input type="checkbox" x-model="multiple_items" x-bind:disabled="itemModeLocked" />
+        Track multiple items
+      </label>
+      <small x-show="itemModeLocked" x-cloak>
+        Tracking mode is locked after reports have been saved.
+      </small>
+      <div class="setup-field" x-show="multiple_items" x-cloak>
+        <p>Keep each item’s reports separate and combine their scores on the leaderboard.</p>
+        <label>
+          Item label
+          <input x-model="item_label" maxlength="80" placeholder="Item, Product, Category" />
+          <small>The name used for the item selector in reports and leaderboards.</small>
+        </label>
+        <template x-for="(item,index) in items" x-bind:key="index">
+          <fieldset class="metric-card">
+            <legend x-text="item_label+' '+(index+1)"></legend>
+            <div class="form-row">
+              <label>
+                Item name
+                <input x-model="item.name" maxlength="80" placeholder="Friendly item name" />
+              </label>
+              <label>
+                Report code
+                <input
+                  x-model="item.code"
+                  x-bind:disabled="isItemUsed(item.code)"
+                  maxlength="80"
+                  placeholder="Code printed on the report"
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              class="text-button"
+              x-on:click="items.splice(index,1)"
+              x-bind:disabled="isItemUsed(item.code)"
+            >
+              Remove item
+            </button>
+            <small x-show="isItemUsed(item.code)">
+              This item has saved reports. Its code and removal are locked; its name can still
+              change.
+            </small>
+          </fieldset>
+        </template>
+        <button
+          type="button"
+          class="button button-outline"
+          x-on:click="addItem()"
+          x-bind:disabled="items.length>=100"
+        >
+          Add item
+        </button>
+        <small>
+          Codes must be unique. Keep leading zeroes exactly as printed. You can add more items when
+          reviewing reports.
+        </small>
+      </div>
+      <div class="form-row">
+        <label>
+          Participant identifier label
+          <input x-model="profile.identifier_label" maxlength="80" placeholder="Cashier No" />
+        </label>
+        <label>
+          Identifier column aliases
+          <input
+            x-model="profile.identifier_aliases"
+            maxlength="500"
+            placeholder="Cashier No, Operator No"
+          />
+        </label>
+      </div>
+      <label>
+        Report date instructions
+        <textarea x-model="profile.date_instructions" maxlength="2000" rows="2"></textarea>
+      </label>
+      <template x-for="(metric,index) in metrics" x-bind:key="metric.key">
+        <fieldset class="metric-card">
+          <legend x-text="'Metric '+(index+1)"></legend>
+          <div class="form-row">
+            <label>
+              Metric label
+              <input x-model="metric.label" maxlength="80" placeholder="Number Sold" />
+            </label>
+            <label>
+              Report column / aliases
+              <input
+                x-model="profile.columns[metric.key]"
+                x-bind:placeholder="metric.label"
+                maxlength="500"
+              />
+            </label>
+          </div>
+          <div class="metric-fields">
+            <label>
+              Value type
+              <select
+                x-model="metric.type"
+                x-bind:disabled="isLocked(metric.key)"
+                x-on:change="changeType(metric)"
+              >
+                <option value="integer">Whole number</option>
+                <option value="decimal">Decimal</option>
+                <option value="currency">Currency</option>
+              </select>
+            </label>
+            <label>
+              Decimal places
+              <input
+                type="number"
+                min="0"
+                max="6"
+                step="1"
+                x-model.number="metric.precision"
+                x-bind:disabled="metric.type==='integer' || isLocked(metric.key)"
+              />
+            </label>
+            <label x-show="metric.type==='currency'">
+              Currency code
+              <input
+                x-model="metric.currency"
+                x-bind:disabled="isLocked(metric.key)"
+                maxlength="3"
+                placeholder="USD"
+              />
+            </label>
+          </div>
+          <div class="setup-field">
+            <label>
+              Scoring mode
+              <select x-model="metric.mode" x-bind:disabled="isLocked(metric.key)">
+                <option value="daily">Daily running total</option>
+                <option value="additive">Additive amount</option>
+                <option value="latest">Latest value</option>
+              </select>
+            </label>
+            <p class="field-help" x-text="modeDescriptions[metric.mode]"></p>
+          </div>
+          <div class="form-row">
+            <label>
+              Minimum (optional)
+              <input
+                x-model="metric.minimum"
+                type="number"
+                x-bind:step="10**-metric.precision"
+                placeholder="Negative values allowed"
+              />
+            </label>
+            <label>
+              Maximum (optional)
+              <input x-model="metric.maximum" type="number" x-bind:step="10**-metric.precision" />
+            </label>
+          </div>
+          <label class="checkbox">
+            <input type="checkbox" x-model="metric.required" />
+            Require this value in future reports
+          </label>
+          <small x-show="isLocked(metric.key)">
+            Type, precision, currency and scoring mode cannot change after this metric has saved
+            values. Report aliases can change without changing scores.
+          </small>
+          <button
+            class="text-button"
+            type="button"
+            x-show="!isExisting(metric.key) && metrics.length>1"
+            x-on:click="removeMetric(metric.key)"
+          >
+            Remove this metric
+          </button>
+        </fieldset>
+      </template>
+      <button
+        type="button"
+        class="button button-outline"
+        x-on:click="addMetric()"
+        x-bind:disabled="metrics.length>=20"
+      >
+        Add metric
+      </button>
+      <div class="notice" x-show="hasAdded" x-cloak>
+        <p>
+          Adding a metric creates a new column for future reports. Earlier reports stay missing, not
+          zero. If required, every future report must include it. Historical values must be
+          recovered from source reports separately.
+        </p>
+        <label class="checkbox">
+          <input type="checkbox" x-model="confirmAdd" />I intend to add these metrics and understand
+          the missing history.
+        </label>
+      </div>
+    </div>
+    <div class="setup-step" x-show="step===3" x-cloak>
+      <p>
+        Choose which metrics appear publicly. Admins always see every metric. Row order below sets
+        leaderboard column order.
+      </p>
+      <template x-for="(metric,index) in metrics" x-bind:key="metric.key">
+        <fieldset class="metric-card">
+          <legend x-text="metric.label"></legend>
+          <label class="checkbox">
+            <input type="checkbox" x-model="metric.public" />
+            Show on public leaderboards
+          </label>
+          <label>
+            Ranking direction
+            <select x-model="metric.direction">
+              <option value="desc">Higher is better</option>
+              <option value="asc">Lower is better</option>
+            </select>
+          </label>
+          <div class="button-row">
+            <button
+              type="button"
+              class="text-button"
+              x-bind:disabled="index===0"
+              x-on:click="metrics.splice(index-1,0,metrics.splice(index,1)[0])"
+            >
+              Move earlier
+            </button>
+            <button
+              type="button"
+              class="text-button"
+              x-bind:disabled="index===metrics.length-1"
+              x-on:click="metrics.splice(index+1,0,metrics.splice(index,1)[0])"
+            >
+              Move later
+            </button>
+          </div>
+        </fieldset>
+      </template>
+      <div class="setup-field">
+        <label>
+          Official ranking metric
+          <select x-model="official">
+            <option value="">Choose a public metric</option>
+            <template x-for="metric in publicMetrics" x-bind:key="metric.key">
+              <option x-bind:value="metric.key" x-text="metric.label"></option>
+            </template>
+          </select>
+        </label>
+        <p>
+          Viewers can sort by other visible metrics. The official metric determines the competition
+          standings.
+        </p>
+      </div>
+      <div class="notice" x-show="rankingChanged" x-cloak>
+        <p>
+          This changes the official ranking immediately using the selected metric’s existing values.
+          Participants missing that metric will be unranked. It does not convert or backfill their
+          scores.
+        </p>
+        <label class="checkbox">
+          <input type="checkbox" x-model="confirmRanking" />I understand and intend to change the
+          official ranking.
+        </label>
+      </div>
+    </div>
+    <div class="setup-step" x-show="step===4" x-cloak>
+      <h3 x-text="editing ? 'Review your changes' : name"></h3>
+      <div class="setup-review-section" x-show="multiple_items" x-cloak>
+        <p>Tracked items · combined scores by default</p>
+        <template x-for="item in items" x-bind:key="item.code">
+          <span x-text="item.name+' · '+item.code"></span>
+        </template>
+      </div>
+      <div class="setup-review-section">
+        <p>Public leaderboard columns</p>
+        <div class="preview-columns">
+          <span class="pill" x-text="profile.identifier_label"></span>
+          <template x-for="metric in publicMetrics" x-bind:key="metric.key">
+            <span
+              class="pill"
+              x-text="metric.label+(metric.key===official?' · Official':'')"
+            ></span>
+          </template>
+        </div>
+      </div>
+      <div class="setup-review-section">
+        <p>Admin leaderboard & manual entry</p>
+        <template x-for="metric in metrics" x-bind:key="metric.key">
+          <div class="metric-review">
+            <strong x-text="metric.label"></strong>
+            <span x-text="metric.type+' · '+metric.precision+' decimal places · '+(metric.public?'Public':'Admin only')+' · '+(metric.required?'Required':'Optional')"></span>
+            <small x-text="modeDescriptions[metric.mode]"></small>
+          </div>
+        </template>
+      </div>
+      <div class="setup-review-section">
+        <p>Manual entry preview</p>
+        <div class="table-wrap report-input-table">
+          <table>
+            <thead>
+              <tr>
+                <th x-text="profile.identifier_label"></th>
+                <template x-for="metric in metrics" x-bind:key="metric.key">
+                  <th x-text="metric.label"></th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <input
+                    disabled
+                    placeholder="Participant ID"
+                    aria-label="Example participant field"
+                  />
+                </td>
+                <template x-for="metric in metrics" x-bind:key="metric.key">
+                  <td>
+                    <input
+                      type="number"
+                      disabled
+                      x-bind:aria-label="metric.label+' example field'"
+                      x-bind:step="10**-metric.precision"
+                      x-bind:min="metric.minimum"
+                      x-bind:max="metric.maximum"
+                      x-bind:placeholder="metric.required ? 'Required' : 'Optional'"
+                    />
+                  </td>
+                </template>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Missing values display as —. Decimal and currency values may be negative unless you set a
+          minimum.
+        </p>
+      </div>
+      <p class="notice" x-show="hasAdded && !confirmAdd">
+        Go back to Data and acknowledge the new metrics before saving.
+      </p>
+      <p class="notice" x-show="rankingChanged && !confirmRanking">
+        Go back to Leaderboard and acknowledge the ranking change before saving.
+      </p>
+    </div>
+    <p class="notice" role="status" x-show="notice" x-text="notice" x-cloak></p>
+    <p class="error" role="alert" x-show="error" x-text="error" x-cloak></p>
+    <div class="button-row setup-actions">
+      <button
+        type="button"
+        class="button button-outline"
+        x-show="step>(editing?2:1)"
+        x-on:click="step--;error=''"
+      >
+        Back
+      </button>
+      <button
+        type="button"
+        class="button button-accent"
+        x-show="step<4"
+        x-on:click="next()"
+        x-bind:disabled="busy"
+      >
+        Continue
+      </button>
+      <button
+        type="submit"
+        class="button button-accent"
+        x-show="step===4"
+        x-bind:disabled="busy || (hasAdded && !confirmAdd) || (rankingChanged && !confirmRanking)"
+        x-cloak
+        x-text="busy ? 'Saving…' : editing ? 'Save competition settings' : 'Create competition'"
+      >
+        {initial ? 'Save competition settings' : 'Create competition'}
+      </button>
+    </div>
+  </form>
+</section>
+<style>
+  .competition-editor p {
+    margin: 0;
+    line-height: 1.65;
+  }
+  .competition-editor > p {
+    margin-bottom: 20px;
+  }
+  .competition-editor .button {
+    margin: 0;
+  }
+  .setup-step {
+    display: grid;
+    gap: 20px;
+    min-width: 0;
+  }
+  .setup-step > label,
+  .setup-step > .form-row {
+    margin: 0;
+  }
+  .setup-field {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+  }
+  .setup-field small,
+  .metric-card small {
+    display: block;
+    line-height: 1.65;
+  }
+  .competition-editor label {
+    line-height: 1.6;
+    min-width: 0;
+  }
+  .schema-source {
+    display: grid;
+    gap: 16px;
+    margin: 0;
+  }
+  .metric-card {
+    display: grid;
+    gap: 18px;
+    margin: 0;
+  }
+  .metric-card .text-button {
+    margin: 0;
+    justify-self: start;
+  }
+  .metric-fields {
+    gap: 16px;
+  }
+  .competition-editor .notice {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+  }
+  .competition-editor .error {
+    margin: 16px 0 0;
+  }
+  .competition-editor form > .notice {
+    margin-top: 20px;
+  }
+  .competition-editor .button-row {
+    gap: 12px;
+  }
+  .setup-actions .button {
+    flex: 1;
+  }
+  .setup-review-section {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+  }
+  .setup-review-section > p:first-child {
+    font-weight: 600;
+  }
+  .setup-review-section .report-input-table {
+    margin: 0;
+  }
+  .setup-step h3 {
+    margin: 0;
+  }
+  @media (max-width: 640px) {
+    .setup-step {
+      gap: 18px;
+    }
+    .metric-card {
+      gap: 16px;
+    }
+  }
+</style>

@@ -1,0 +1,17 @@
+---
+import Layout from './Layout.astro';
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+---
+
+<Layout title={title} active="legal">
+  <article class="legal-page">
+    <header>
+      <h1>{title}</h1>
+      <p class="legal-updated">Last updated: October 6, 2026</p>
+    </header>
+    <slot />
+  </article>
+</Layout>

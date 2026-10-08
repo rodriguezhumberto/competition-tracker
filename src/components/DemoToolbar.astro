@@ -1,0 +1,136 @@
+---
+import type { DemoState } from '../lib/demo-access.ts';
+import QRCode from 'qrcode';
+import '../styles/demo-harness.css';
+interface Props {
+  initial: DemoState;
+}
+const { initial } = Astro.props;
+const invite = initial.shareUrl || '';
+const qrCode =
+  initial.role === 'owner'
+    ? `data:image/svg+xml,${encodeURIComponent(
+        await QRCode.toString(invite, {
+          type: 'svg',
+          errorCorrectionLevel: 'M',
+          margin: 4,
+        }),
+      )}`
+    : null;
+---
+
+<aside
+  class="demo-harness"
+  x-data={`demoToolbar(${JSON.stringify(initial)})`}
+  aria-label="Demo controls"
+>
+  <div class="demo-harness-bar">
+    <span class="pill">DEMO</span>
+    <span class="demo-harness-description">Sample data · simulated participants</span>
+    <button
+      class="button button-outline"
+      x-show="state.role === 'owner' && state.session?.status !== 'active'"
+      x-bind:disabled="busy"
+      x-on:click="action('start')"
+    >
+      Start demo Power Hour
+    </button>
+    <details
+      class="demo-harness-options"
+      open={initial.mode === 'presenter'}
+      x-show="state.role === 'owner'"
+    >
+      <summary>Demo controls</summary>
+      <div class="demo-harness-menu">
+        <div class="button-row" role="group" aria-label="Demo mode">
+          <button
+            class="button button-outline"
+            x-bind:aria-pressed="state.mode === 'public'"
+            x-bind:disabled="busy"
+            x-on:click="action('mode', { mode: 'public' })"
+          >
+            Explore on your own
+          </button>
+          <button
+            class="button button-outline"
+            x-bind:aria-pressed="state.mode === 'presenter'"
+            x-bind:disabled="busy"
+            x-on:click="action('mode', { mode: 'presenter' })"
+          >
+            Present to a group
+          </button>
+        </div>
+        <div class="button-row" x-show="state.session?.status === 'active'">
+          <button
+            class="button button-outline"
+            x-show="state.mode === 'presenter' && !state.simulation.paused"
+            x-bind:disabled="busy"
+            x-on:click="action('pause')"
+          >
+            Pause simulated users
+          </button>
+          <button
+            class="button button-outline"
+            x-show="state.mode === 'presenter' && state.simulation.paused"
+            x-bind:disabled="busy"
+            x-on:click="action('resume')"
+          >
+            Resume simulated users
+          </button>
+          <button
+            class="button button-outline"
+            x-bind:disabled="busy"
+            x-on:click="action('review')"
+          >
+            Show review flag
+          </button>
+          <button
+            class="button button-outline"
+            x-bind:disabled="busy"
+            x-on:click="action('extend', { minutes: 1 })"
+          >
+            Add one minute
+          </button>
+          <button class="button button-outline" x-bind:disabled="busy" x-on:click="action('end')">
+            End &amp; archive
+          </button>
+        </div>
+        <p x-show="state.simulation.paused" class="demo-harness-description">
+          Simulated users are paused. The countdown continues.
+        </p>
+        <div x-show="state.mode === 'presenter'" class="demo-harness-invite">
+          {qrCode && (
+            <figure class="demo-harness-qr">
+              <a href={invite} aria-label="Open audience join link">
+                <img
+                  src={qrCode}
+                  alt="QR code for the audience join link"
+                  width="256"
+                  height="256"
+                />
+              </a>
+              <figcaption>Scan to join this demo</figcaption>
+            </figure>
+          )}
+          <div class="demo-harness-invite-link">
+            <label>
+              Audience join link
+              <input readonly x-bind:value="shareUrl" />
+            </label>
+            <button
+              class="button button-outline"
+              x-on:click="copyInvite()"
+              x-text="copied ? 'Copied!' : 'Copy join link'"
+            >
+              Copy join link
+            </button>
+          </div>
+        </div>
+        <button class="button button-outline" x-bind:disabled="busy" x-on:click="action('reset')">
+          Reset my demo
+        </button>
+      </div>
+    </details>
+  </div>
+  <p class="error" role="alert" x-show="error" x-text="error" x-cloak></p>
+</aside>

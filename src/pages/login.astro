@@ -1,0 +1,72 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { allowAttempt, sameOrigin } from '../lib/auth.ts';
+import { limitedFormData } from '../lib/http.ts';
+import {
+  newViewerSession,
+  safeReturnPath,
+  siteAccessAllowed,
+  viewerPasswordMatches,
+  VIEWER_COOKIE,
+  VIEWER_SESSION_SECONDS,
+} from '../lib/site-access.ts';
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+let returnTo = safeReturnPath(Astro.url.searchParams.get('returnTo'));
+if (siteAccessAllowed(Astro.request.headers.get('cookie') || undefined))
+  return Astro.redirect(returnTo, 303);
+let error = '';
+if (Astro.request.method === 'POST') {
+  try {
+    if (!sameOrigin(Astro.request)) throw new Error('Invalid origin.');
+    if (!allowAttempt(`site-login:${Astro.clientAddress}`))
+      throw new Error('Too many attempts. Try again in 10 minutes.');
+    const form = await limitedFormData(Astro.request, 4096);
+    returnTo = safeReturnPath(
+      typeof form.get('returnTo') === 'string' ? String(form.get('returnTo')) : null,
+    );
+    if (!viewerPasswordMatches(form.get('password'))) throw new Error('Incorrect password.');
+    Astro.cookies.set(VIEWER_COOKIE, newViewerSession(), {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: Astro.url.protocol === 'https:',
+      path: '/',
+      maxAge: VIEWER_SESSION_SECONDS,
+    });
+    return Astro.redirect(returnTo, 303);
+  } catch (cause) {
+    error = cause instanceof Error ? cause.message : 'Unable to sign in.';
+  }
+}
+---
+
+<Layout title="Sign in">
+  <section class="login-card">
+    <h1>Sign in to view this site</h1>
+    <p>This site is private. Enter the password shared by your administrator.</p>
+    {error && (
+      <p class="error" role="alert">
+        {error}
+      </p>
+    )}
+    <form method="POST">
+      <input type="hidden" name="returnTo" value={returnTo} />
+      <label>
+        Site password
+        <input
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          required
+          autofocus
+          maxlength="128"
+        />
+      </label>
+      <button class="button button-accent" type="submit">
+        Sign in
+      </button>
+    </form>
+    <p>
+      <a href="/admin/login">Admin sign in</a>
+    </p>
+  </section>
+</Layout>

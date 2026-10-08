@@ -1,0 +1,95 @@
+---
+import type { sessionScores } from '../../lib/store.ts';
+
+interface Props {
+  sessionId: number;
+  metricLabel: string;
+  scores: ReturnType<typeof sessionScores>;
+  controller?: string;
+}
+
+const { sessionId, metricLabel, scores, controller } = Astro.props;
+---
+
+<section
+  class="rankings power-hour-admin-leaderboard"
+  x-data={controller || `adminPowerHourLeaderboard(${JSON.stringify({ sessionId, scores })})`}
+  aria-label="Live Power Hour leaderboard"
+>
+  <div class="section-heading">
+    <div>
+      <span class="eyebrow">
+        <span class="status-dot"></span> LIVE POWER HOUR
+      </span>
+      <h2>Current standings</h2>
+    </div>
+    <div class="power-hour-leaderboard-status">
+      <span
+        class="power-hour-review-count"
+        x-bind:class="{ 'has-flags': scores.some(person => person.flagged) }"
+        x-text="scores.some(person => person.flagged) ? scores.filter(person => person.flagged).length + ' flagged for review' : 'No flags'"
+        aria-live="polite"
+      >
+        {scores.filter((person) => person.flagged).length
+          ? `${scores.filter((person) => person.flagged).length} flagged for review`
+          : 'No flags'}
+      </span>
+      <span
+        class="pill"
+        x-text="scores.length + (scores.length === 1 ? ' participant' : ' participants')"
+      >
+        {scores.length} participants
+      </span>
+    </div>
+  </div>
+  <div
+    class="power-hour-review-notice"
+    x-show="scores.some(person => person.flagged)"
+    x-cloak
+    role="status"
+  >
+    ⚑ Review flagged participants. They added more than 10 entries in 60 seconds; their entries
+    still count.
+  </div>
+  <div class="table-wrap" x-show="scores.length > 0">
+    <table class="leaderboard-table">
+      <thead>
+        <tr>
+          <th class="rank-col">RANK</th>
+          <th class="operator-col">PARTICIPANT</th>
+          <th class="score-col">{metricLabel.toUpperCase()}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="(person, index) in scores" x-bind:key="person.userId">
+          <tr x-bind:class="{ 'first-place': index === 0 && person.clicks > 0, 'power-hour-review-row': person.flagged }">
+            <td class="rank-col">
+              <span class="rank-number" x-text="String(index + 1).padStart(2, '0')"></span>
+            </td>
+            <td class="operator-col">
+              <strong x-text="person.name"></strong>
+              <span class="power-hour-flag" x-show="person.flagged" x-cloak>
+                ⚑ FLAGGED
+              </span>
+            </td>
+            <td class="score-col">
+              <strong x-text="person.clicks"></strong>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+  <div class="empty-state" x-show="scores.length === 0">
+    Waiting for participants to join.
+  </div>
+  <div class="table-foot">
+    <span>
+      <span class="status-dot" x-bind:class="{neutral: !connected}"></span>
+      <span x-text="connected ? 'Scores update live' : 'Reconnecting to live scores…'">
+        Connecting to live scores…
+      </span>
+    </span>
+    <span>Review flag: more than 10 entries in 60 seconds.</span>
+  </div>
+</section>

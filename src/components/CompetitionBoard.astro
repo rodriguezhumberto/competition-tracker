@@ -1,0 +1,311 @@
+---
+import MetricVerticalChart from './MetricVerticalChart.astro';
+import MetricStandingsTable from './MetricStandingsTable.astro';
+import { formatMetric } from '../lib/metrics.ts';
+import type { leaderboard } from '../lib/competition-store.ts';
+import { zonedClock } from '../lib/report-time.ts';
+interface Props {
+  board: ReturnType<typeof leaderboard>;
+  admin?: boolean;
+  base?: string;
+  query?: Record<string, string>;
+  exportBase?: string | null;
+}
+const {
+  board,
+  admin = false,
+  base: configuredBase,
+  query = {},
+  exportBase = '/api/results',
+} = Astro.props;
+const { competition, metrics, selected, rows, period } = board;
+const leader = rows.find((r) => r.rank === 1);
+const officialLabel = metrics.find((m) => m.key === competition.official_metric_key)?.label;
+const base = configuredBase || (admin ? `/competitions/${competition.id}` : '/');
+const viewQuery = new URLSearchParams({
+  ...query,
+  metric: selected.key,
+  period,
+  ...(board.selectedItem ? { item: board.selectedItem } : {}),
+});
+const today = zonedClock(competition.timezone).slice(0, 10);
+const upcoming = competition.start_date > today,
+  ended = competition.end_date < today;
+const daysLeft = Math.max(
+  0,
+  Math.round((Date.parse(competition.end_date) - Date.parse(today)) / 86400000),
+);
+const peak = Math.max(0, ...rows.map((r) => Number(r.values[selected.key] || 0)));
+const metricLabel = selected.label.toLowerCase();
+const reportedCount = rows.filter((r) => r.rank !== null).length;
+const missingCount = rows.length - reportedCount;
+const leaderCount = rows.filter((r) => r.rank === 1).length;
+const periodLabel =
+  period === 'lifetime' ? 'Full competition' : period === 'day' ? 'Today' : 'This week';
+const identifierLabel =
+  board.identifierLabel === 'Operator number' ? 'Operator' : board.identifierLabel;
+---
+
+<div data-competition-board>
+  <p class="error board-error" role="alert" hidden></p>
+  <section class="competition-banner">
+    <div class="competition-info">
+      <div class="eyebrow">
+        {admin
+          ? 'COMPETITION DASHBOARD'
+          : upcoming
+            ? 'UPCOMING COMPETITION'
+            : ended
+              ? 'COMPLETED COMPETITION'
+              : 'CURRENT COMPETITION'}
+      </div>
+      <h2>{competition.name}</h2>
+      <p>
+        {competition.start_date} — {competition.end_date} · Official ranking: {officialLabel}
+      </p>
+    </div>
+    <div class="days-left">
+      <strong>{upcoming ? 'SOON' : daysLeft}</strong>
+      <span>{upcoming ? 'STARTING SOON' : 'DAYS TO GO'}</span>
+    </div>
+  </section>
+  <section class="competition-overview" aria-label={`Competition overview · ${periodLabel}`}>
+    <p class="overview-period">Competition overview · {periodLabel}</p>
+    <div class="stats-grid">
+      <div class="stat">
+        <span class="eyebrow">Total {metricLabel}</span>
+        <div>
+          <strong>{formatMetric(board.total, selected)}</strong>
+        </div>
+        <p>
+          {selected.mode === 'latest'
+            ? 'Sum of latest reported values'
+            : period === 'lifetime'
+              ? 'Competition total'
+              : period === 'day'
+                ? 'Daily total'
+                : 'Weekly total'}
+        </p>
+      </div>
+      <div class="stat">
+        <span class="eyebrow">Participants</span>
+        <div>
+          <strong>{reportedCount}</strong>
+        </div>
+        <p>With reported {metricLabel}</p>
+        {missingCount > 0 && (
+          <p class="overview-missing">
+            {missingCount} {missingCount === 1 ? 'participant has' : 'participants have'} no
+            reported {metricLabel}.
+          </p>
+        )}
+      </div>
+      <div class="stat">
+        <span class="eyebrow">
+          {leaderCount > 1 ? 'Joint leaders' : 'Leader'} by {metricLabel}
+        </span>
+        <div>
+          <strong>{leader ? `${identifierLabel} #${leader.operatorNumber}` : '—'}</strong>
+        </div>
+        <p>
+          {leader
+            ? `${formatMetric(leader.values[selected.key], selected)} ${metricLabel}`
+            : `No reported ${metricLabel} yet.`}
+          {leaderCount > 1 ? ` · ${leaderCount} share first place` : ''}
+        </p>
+      </div>
+    </div>
+  </section>
+  {!admin && (
+    <section class="activity-card">
+      <div class="section-heading">
+        <h3>Latest moves · {selected.label}</h3>
+      </div>
+      {board.updates.map((update) => (
+        <div class="activity-item">
+          <span class="activity-square"></span>
+          <div>
+            <strong>#{update.operatorNumber}</strong>
+            <p>
+              {selected.mode === 'latest' ? 'Latest value recorded' : 'Report contribution'}
+              {board.multipleItems && ` · ${update.itemName}`}
+              <small>
+                {zonedClock(competition.timezone, new Date(update.timestamp)).replace('T', ' ')}
+              </small>
+            </p>
+          </div>
+          <b>
+            {selected.mode !== 'latest' && !update.amount.startsWith('-') ? '+' : ''}
+            {formatMetric(update.amount, selected)}
+          </b>
+        </div>
+      ))}
+      {!board.updates.length && (
+        <p class="empty-state">Your team’s latest progress will appear here.</p>
+      )}
+    </section>
+  )}
+  {board.multipleItems && !board.selectedItem && (
+    <details class="item-coverage" data-item-coverage>
+      <summary>
+        Item reporting coverage · {board.items.filter((item) => item.updated).length}/
+        {board.items.length} reported in this period
+      </summary>
+      <ul>
+        {board.items.map((item) => (
+          <li>
+            {item.name}:{' '}
+            {item.updated
+              ? zonedClock(competition.timezone, new Date(item.updated)).replace('T', ' · ')
+              : 'No reports in this period'}
+          </li>
+        ))}
+      </ul>
+      <p>Combined scores retain each item’s accepted progress. Update times may differ.</p>
+    </details>
+  )}
+  <section class="rankings top-operators">
+    <div class="section-heading">
+      <div>
+        {admin && <div class="eyebrow">ALL TRACKED METRICS</div>}
+        <h2>
+          {board.selectedItem
+            ? `${board.items.find((item) => item.code === board.selectedItem)?.name} standings`
+            : 'Standings'}
+        </h2>
+      </div>
+    </div>
+    <form class="board-controls" method="GET" action={base}>
+      {Object.entries(query).map(([name, value]) => (
+        <input type="hidden" name={name} value={value} />
+      ))}
+      <label>
+        Sort by metric
+        <select name="metric">
+          {metrics.map((m) => (
+            <option value={m.key} selected={m.key === selected.key}>
+              {m.label}
+              {m.key === competition.official_metric_key ? ' · Official' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Time period
+        <select name="period">
+          <option value="day" selected={period === 'day'}>
+            Day
+          </option>
+          <option value="week" selected={period === 'week'}>
+            Week
+          </option>
+          <option value="lifetime" selected={period === 'lifetime'}>
+            Competition
+          </option>
+        </select>
+      </label>
+      {admin && exportBase && (
+        <a
+          class="button button-outline"
+          href={`${exportBase}?competition_id=${competition.id}&${viewQuery}`}
+          download
+        >
+          Download CSV
+        </a>
+      )}
+      {board.multipleItems && (
+        <label>
+          {board.itemLabel}
+          <select name="item" aria-label="Filter by item">
+            <option value="" selected={!board.selectedItem}>
+              All items
+            </option>
+            {board.items.map((item) => (
+              <option value={item.code} selected={item.code === board.selectedItem}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <noscript>
+        <button class="button button-outline">Apply view</button>
+      </noscript>
+    </form>
+    <p class="board-explanation">
+      {selected.direction === 'asc' ? 'Lower' : 'Higher'} {selected.label} ranks first.{' '}
+      {(board.selectedItem || selected.key !== competition.official_metric_key) &&
+        `Official competition ranking remains ${officialLabel}${board.multipleItems ? ' across all items' : ''}.`}{' '}
+      Missing values are unranked; equal values share a rank.
+    </p>
+    {leader && selected.direction === 'desc' && peak > 0 ? (
+      <MetricVerticalChart board={board}>
+        <MetricStandingsTable board={board} base={base} query={query} overflow />
+      </MetricVerticalChart>
+    ) : (
+      <MetricStandingsTable board={board} base={base} query={query} />
+    )}
+
+    {!rows.length && <p class="empty-state">No progress reports in this period yet.</p>}
+    <div class="table-foot">
+      <span>
+        {period === 'week' ? 'Monday–Sunday' : period === 'day' ? 'Today' : 'Competition dates'} ·{' '}
+        {competition.timezone}
+      </span>
+      <a data-board-link href={`${base}?${viewQuery}`}>
+        Refresh standings ↻
+      </a>
+    </div>
+  </section>
+</div>
+
+<style>
+  .competition-overview {
+    margin: 22px 0 30px;
+  }
+  .overview-period {
+    margin: 0 0 10px;
+    font-size: 12px;
+  }
+  .competition-overview .stats-grid {
+    margin: 0;
+  }
+  .competition-overview .stat {
+    padding: 20px 24px;
+  }
+  .competition-overview .stat > .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+  .competition-overview .stat > div {
+    margin-top: 10px;
+  }
+  .competition-overview .stat strong {
+    font-size: 36px;
+    line-height: 1.2;
+  }
+  .competition-overview .stat p {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .competition-overview .overview-missing {
+    margin-top: 4px;
+  }
+  @media (max-width: 640px) {
+    .competition-overview {
+      margin-bottom: 26px;
+    }
+    .competition-overview .stat {
+      padding: 16px;
+    }
+    .competition-overview .stat strong {
+      font-size: 30px;
+    }
+    .competition-overview .stat > .eyebrow {
+      font-size: 10px;
+    }
+    .competition-overview .stat p {
+      font-size: 11px;
+    }
+  }
+</style>

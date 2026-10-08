@@ -1,0 +1,114 @@
+<div class="setup-field" x-show="multipleItems" x-cloak>
+  <label>
+    <span x-text="itemLabel"></span>
+    <select x-model="report.item_code" x-bind:required="multipleItems" aria-label="Tracked item">
+      <option value="">Choose an item</option>
+      <template x-for="item in items" x-bind:key="item.code">
+        <option x-bind:value="item.code" x-text="item.name+' · '+item.code"></option>
+      </template>
+    </select>
+  </label>
+  <small>
+    Scores are tracked separately for this item and included in the combined leaderboard.
+  </small>
+</div>
+<div class="form-row">
+  <label>
+    Report generation time
+    <input x-model="report.generated_at" placeholder="2026-09-27T22:11:00" required />
+    <small>
+      ISO date and time. Without an offset, interpreted in <span x-text="timezone"></span>. Add an
+      offset for a repeated daylight-saving hour.
+    </small>
+  </label>
+  <div class="form-row">
+    <label>
+      Period start
+      <span class="date-input-wrap">
+        <input type="date" x-model="report.period_start" required />
+      </span>
+    </label>
+    <label>
+      Period end
+      <span class="date-input-wrap">
+        <input type="date" x-model="report.period_end" required />
+      </span>
+    </label>
+  </div>
+</div>
+<p class="field-help">
+  Daily running totals must cover one day. Other reports contribute to their period end date.
+  Missing optional values remain missing.
+</p>
+<div class="table-wrap report-input-table">
+  <table>
+    <thead>
+      <tr>
+        <th x-text="identifierLabel"></th>
+        <template x-for="metric in metrics" x-bind:key="metric.key">
+          <th>
+            <span x-text="metric.label"></span>
+            <small x-text="metric.required ? 'Required' : 'Optional'"></small>
+          </th>
+        </template>
+        <th>Row</th>
+      </tr>
+    </thead>
+    <tbody>
+      <template x-for="(row,index) in report.rows" x-bind:key="index">
+        <tr>
+          <td>
+            <input
+              x-model="row.participant_id"
+              x-bind:aria-label="identifierLabel+' row '+(index+1)"
+              maxlength="80"
+              required
+            />
+          </td>
+          <template x-for="metric in metrics" x-bind:key="metric.key">
+            <td>
+              <input
+                type="number"
+                x-model="row.values[metric.key]"
+                x-bind:aria-label="metric.label+' row '+(index+1)"
+                x-bind:step="10**-metric.precision"
+                x-bind:min="metric.minimum"
+                x-bind:max="metric.maximum"
+                x-bind:required="metric.required"
+                x-bind:placeholder="metric.required ? 'Enter value' : 'Missing'"
+              />
+            </td>
+          </template>
+          <td>
+            <button
+              type="button"
+              class="text-button"
+              x-on:click="report.rows.splice(index,1)"
+              x-bind:disabled="report.rows.length===1"
+              x-bind:aria-label="'Remove row '+(index+1)"
+            >
+              Remove
+            </button>
+          </td>
+        </tr>
+      </template>
+    </tbody>
+  </table>
+</div>
+<button
+  type="button"
+  class="text-button"
+  x-on:click="addRow()"
+  x-bind:disabled="report.rows.length>=100"
+>
+  Add participant row
+</button>
+<details class="metric-help">
+  <summary>How these metrics are scored</summary>
+  <template x-for="metric in metrics" x-bind:key="metric.key">
+    <p>
+      <strong x-text="metric.label+': '"></strong>
+      <span x-text="modeDescriptions[metric.mode]"></span>
+    </p>
+  </template>
+</details>

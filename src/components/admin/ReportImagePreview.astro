@@ -1,0 +1,298 @@
+---
+const corners = [
+  ['nw', 'top left'],
+  ['ne', 'top right'],
+  ['sw', 'bottom left'],
+  ['se', 'bottom right'],
+];
+const fields = [
+  ['x', 'Crop left (%)'],
+  ['y', 'Crop top (%)'],
+  ['width', 'Crop width (%)'],
+  ['height', 'Crop height (%)'],
+];
+---
+
+<div class="report-image-preview" x-show="file" x-cloak>
+  <p>Align the text, then crop to the report.</p>
+  <div
+    class="report-crop-stage"
+    x-bind:class="{'is-cropping':cropping}"
+    x-show="imagePreview"
+    x-on:pointerdown="startCropDrag($event)"
+    x-on:pointermove="moveCropDrag($event)"
+    x-on:pointerup="endCropDrag($event)"
+    x-on:pointercancel="endCropDrag($event)"
+    x-on:lostpointercapture="endCropDrag($event)"
+  >
+    <canvas
+      x-ref="rotationPreview"
+      x-show="previewAdjusting"
+      aria-label="Live report orientation preview"
+    ></canvas>
+    <img
+      x-show="!previewAdjusting"
+      x-bind:src="imagePreview || undefined"
+      alt="Report orientation preview"
+      draggable="false"
+    />
+    <div class="report-alignment-grid" x-show="straightening && !cropping" aria-hidden="true"></div>
+    <div
+      class="report-crop-selection"
+      x-show="cropping"
+      role="group"
+      aria-label="Crop selection"
+      tabindex="0"
+      data-crop-handle="move"
+      x-bind:style="'left:'+cropDraft.x*100+'%;top:'+cropDraft.y*100+'%;width:'+cropDraft.width*100+'%;height:'+cropDraft.height*100+'%'"
+      x-on:keydown="cropKeyboard($event,'move')"
+    >
+      {corners.map(([corner, label]) => (
+        <button
+          type="button"
+          class={`report-crop-handle handle-${corner}`}
+          aria-label={`Resize crop ${label}`}
+          data-crop-handle={corner}
+          x-on:keydown={`cropKeyboard($event,'${corner}')`}
+        />
+      ))}
+    </div>
+  </div>
+  <div x-show="cropping" class="report-crop-editor" x-cloak>
+    <p>Drag the corners to crop. Keep headers, dates and every participant row.</p>
+    <details class="report-crop-details">
+      <summary>Precise crop adjustments</summary>
+      <p>Arrow keys move the selection or resize a focused corner. Hold Shift for larger steps.</p>
+      <div class="report-crop-fields">
+        {fields.map(([field, label]) => (
+          <label>
+            {label}
+            <input
+              type="number"
+              min={field === 'x' || field === 'y' ? '0' : '2'}
+              max="100"
+              step="0.1"
+              x-bind:value={`Math.round(cropDraft.${field}*1000)/10`}
+              x-on:input={`updateCropField('${field}',$event)`}
+            />
+          </label>
+        ))}
+      </div>
+    </details>
+    <div class="button-row">
+      <button
+        type="button"
+        class="button button-accent"
+        x-on:click="applyCrop()"
+        x-bind:disabled="busy"
+      >
+        Apply crop
+      </button>
+      <button
+        type="button"
+        class="button button-outline"
+        x-on:click="cancelCrop()"
+        x-bind:disabled="busy"
+      >
+        Cancel crop
+      </button>
+    </div>
+  </div>
+  <div class="report-image-toolbar" role="group" aria-label="Image adjustments">
+    <div class="report-image-tools">
+      <button
+        type="button"
+        class="button button-outline image-tool"
+        aria-label="Rotate left"
+        title="Rotate left 90°"
+        x-on:click="rotateImage(-90)"
+        x-bind:disabled="busy || imageLoading || !imagePreview"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 10a9 9 0 1 1 2.6 8.4M3 4v6h6" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="button button-outline image-tool"
+        aria-label="Rotate right"
+        title="Rotate right 90°"
+        x-on:click="rotateImage(90)"
+        x-bind:disabled="busy || imageLoading || !imagePreview"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M21 10a9 9 0 1 0-2.6 8.4M21 4v6h-6" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="button button-outline image-tool"
+        x-show="!cropping"
+        x-bind:aria-label="crop ? 'Edit crop' : 'Crop report'"
+        x-bind:title="crop ? 'Edit crop' : 'Crop report'"
+        x-on:click="beginCrop()"
+        x-bind:disabled="busy || imageLoading || !imagePreview"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M6 3v15h15M3 6h15v15" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="button button-outline image-tool"
+        aria-label="Reset crop"
+        title="Reset crop"
+        x-show="crop || cropping"
+        x-on:click="resetCrop()"
+        x-bind:disabled="busy"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 10a9 9 0 1 1 2.6 8.4M3 4v6h6M12 7v5l3 2" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="button button-outline image-tool"
+        x-on:click="detectOrientation()"
+        x-bind:disabled="busy || imageLoading || detectingOrientation || cropping || !imagePreview"
+        aria-label="Recheck orientation"
+        title="Recheck orientation"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="20"
+          height="20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M20 7a9 9 0 0 0-15-2L3 7m0-5v5h5M4 17a9 9 0 0 0 15 2l2-2m0 5v-5h-5" />
+        </svg>
+      </button>
+    </div>
+    <label class="report-straighten">
+      <span>
+        Straighten{' '}
+        <output x-text="(fineRotation > 0 ? '+' : '')+fineRotation.toFixed(1)+'°'">0.0°</output>
+      </span>
+      <input
+        type="range"
+        min="-45"
+        max="45"
+        step="0.1"
+        aria-label="Straighten image"
+        x-bind:value="fineRotation"
+        x-bind:aria-valuetext="fineRotation.toFixed(1)+' degrees'"
+        x-bind:disabled="busy || imageLoading || cropping || !imagePreview"
+        x-on:focus="straightening=true"
+        x-on:blur="straightening=false"
+        x-on:input="straightenImage(Number($event.target.value), $refs.rotationPreview)"
+      />
+    </label>
+    <button
+      type="button"
+      class="button button-outline image-tool"
+      aria-label="Reset straightening"
+      title="Reset straightening"
+      x-on:click="straightenImage(0, $refs.rotationPreview)"
+      x-bind:disabled="busy || imageLoading || cropping || !fineRotation"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m8 3-5 5 5 5M3 8h11a7 7 0 0 1 0 14h-3" />
+      </svg>
+    </button>
+  </div>
+  <p
+    role="status"
+    aria-label="Page boundary suggestion"
+    aria-live="polite"
+    x-show="pageBoundaryMessage"
+    x-text="pageBoundaryMessage"
+  ></p>
+  <div class="button-row" x-show="pageBoundary?.status==='suggested' && !cropping && !crop">
+    <button
+      type="button"
+      class="button button-outline"
+      x-on:click="reviewPageBoundary()"
+      x-bind:disabled="busy || imageLoading || detectingOrientation"
+    >
+      Review suggested crop
+    </button>
+    <button type="button" class="text-button" x-on:click="keepWholeImage()" x-bind:disabled="busy">
+      Keep whole image
+    </button>
+  </div>
+  <p
+    role="status"
+    aria-label="Report crop"
+    aria-live="polite"
+    x-show="cropMessage"
+    x-text="cropMessage"
+  ></p>
+  <p
+    role="status"
+    aria-label="Automatic orientation detection"
+    aria-live="polite"
+    x-show="orientationMessage"
+    x-text="orientationMessage"
+  ></p>
+  <div class="button-row">
+    <button
+      type="button"
+      class="button button-outline"
+      x-show="orientation?.status==='uncertain' && orientation?.rotation !== null"
+      x-on:click="applySuggestedOrientation()"
+      x-bind:disabled="busy || imageLoading || detectingOrientation || cropping"
+      x-text="'Use suggested rotation ('+(orientation?.rotation ?? 0)+'°)'"
+    ></button>
+  </div>
+  <p
+    role="status"
+    aria-label="Report image orientation"
+    aria-live="polite"
+    x-text="imageLoading ? 'Preparing image preview…' : 'Rotation: '+rotation+'°'"
+  ></p>
+</div>

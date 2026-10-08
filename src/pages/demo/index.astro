@@ -1,0 +1,45 @@
+---
+import { itemFilterErrorResponse } from '../../lib/leaderboard.ts';
+import Layout from '../../layouts/Layout.astro';
+import PowerHourExperience from '../../components/PowerHourExperience.astro';
+import { requireDemo, demoState } from '../../lib/demo-access.ts';
+let state;
+let error = '';
+const query: Record<string, string> = {};
+for (const key of ['room', 'invite'])
+  if (Astro.url.searchParams.has(key)) query[key] = Astro.url.searchParams.get(key)!;
+try {
+  const { id, owner } = requireDemo(Astro.cookies, Astro.url, Astro.clientAddress, true);
+  state = demoState(id, owner, Astro.cookies, Astro.url);
+} catch (cause) {
+  const response = itemFilterErrorResponse(cause, Astro.url);
+  if (response) return response;
+  Astro.response.status = 403;
+  error = cause instanceof Error ? cause.message : 'Unable to load this demo.';
+}
+---
+
+<Layout title="Demo leaderboard" demo={state}>
+  {state ? (
+    <div data-demo-workspace>
+      <PowerHourExperience
+        board={state.board}
+        initial={state}
+        controller="demoPowerHour"
+        base="/demo"
+        query={query}
+        demo
+      />
+    </div>
+  ) : (
+    <section class="panel">
+      <h1>This demo is unavailable</h1>
+      <p class="error" role="alert">
+        {error}
+      </p>
+      <a class="button button-accent" href="/demo">
+        Start your own demo
+      </a>
+    </section>
+  )}
+</Layout>

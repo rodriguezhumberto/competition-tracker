@@ -1,0 +1,125 @@
+---
+import Icon from '../Icon.astro';
+import type { activeSession } from '../../lib/store.ts';
+import PowerHourLiveLeaderboard from './PowerHourLiveLeaderboard.astro';
+import type { sessionScores } from '../../lib/store.ts';
+import { suggestedPowerHourName } from '../../lib/power-hour-name.ts';
+
+interface Props {
+  session: ReturnType<typeof activeSession>;
+  scores: ReturnType<typeof sessionScores>;
+}
+
+const { session, scores } = Astro.props;
+const scheduledEnd = session
+  ? new Date(
+      Date.parse(session.ends_at || session.created_at) + (session.ends_at ? 0 : 3600000),
+    ).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+  : '';
+---
+
+<section class="power-hour-admin" id="power-hour">
+  <div>
+    <h2>{session ? session.name + ' is live.' : 'Start a Power Hour'}</h2>
+    <p>
+      {session
+        ? `Tracking ${session.metric_label || 'points'}. Scheduled to end ${scheduledEnd}. Add time whenever you need to.`
+        : 'Choose what to track and how long the scoreboard runs. Share the password with anyone you want to join.'}
+    </p>
+  </div>
+  {session ? (
+    <div>
+      <form action="/api/admin" method="POST">
+        <input type="hidden" name="action" value="extend" />
+        <label for="extend-minutes">
+          Add minutes
+          <input
+            id="extend-minutes"
+            name="duration_minutes"
+            type="number"
+            min="1"
+            max="1440"
+            step="1"
+            value="15"
+            required
+          />
+        </label>
+        <button class="button button-accent">
+          Add time{' '}
+          <span>
+            <Icon />
+          </span>
+        </button>
+      </form>
+      <form action="/api/admin" method="POST">
+        <input type="hidden" name="action" value="archive" />
+        <button class="button button-accent">
+          End & archive{' '}
+          <span>
+            <Icon />
+          </span>
+        </button>
+      </form>
+    </div>
+  ) : (
+    <form action="/api/admin" method="POST">
+      <input type="hidden" name="action" value="start" />
+      <label for="power-hour-name">
+        Power Hour name
+        <input
+          id="power-hour-name"
+          name="name"
+          value={suggestedPowerHourName()}
+          maxlength="80"
+          required
+        />
+      </label>
+      <label for="power-hour-metric">
+        What are you tracking?
+        <input
+          id="power-hour-metric"
+          name="metric_label"
+          value="points"
+          placeholder="Surveys, sales…"
+          maxlength="80"
+          required
+        />
+      </label>
+      <label for="power-hour-duration">
+        Duration (minutes)
+        <input
+          id="power-hour-duration"
+          name="duration_minutes"
+          type="number"
+          min="1"
+          max="1440"
+          step="1"
+          value="60"
+          required
+        />
+      </label>
+      <label for="power-hour-password">
+        Shared password
+        <input
+          id="power-hour-password"
+          name="password"
+          type="password"
+          minlength="8"
+          maxlength="128"
+          autocomplete="new-password"
+          required
+        />
+      </label>
+      <button class="button button-accent">
+        Start Power Hour <span>ϟ</span>
+      </button>
+    </form>
+  )}
+</section>
+{session && (
+  <PowerHourLiveLeaderboard
+    sessionId={session.id}
+    metricLabel={session.metric_label || 'points'}
+    scores={scores}
+  />
+)}

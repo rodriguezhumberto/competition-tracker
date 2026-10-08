@@ -1,0 +1,42 @@
+---
+import type { getCompetitionConfigurations } from '../../lib/competition-store.ts';
+import ReportFields from './ReportFields.astro';
+interface Props {
+  competitions: ReturnType<typeof getCompetitionConfigurations>;
+}
+const { competitions } = Astro.props;
+---
+
+<section
+  data-competition-admin
+  class="panel manual-report"
+  x-data={`reportEntry(${JSON.stringify(competitions)},${competitions.find((c) => c.is_active)?.id || 'null'})`}
+>
+  <div class="eyebrow">RECORD THE PROGRESS</div>
+  <h2>Add a batch report manually</h2>
+  <p>Choose a competition to load its metric fields. All rows are validated and saved together.</p>
+  {competitions.length ? (
+    <form x-on:submit.prevent="save()">
+      <label>
+        Competition
+        <select x-model="competitionId" x-on:change="changeCompetition()">
+          {competitions.map((c) => (
+            <option value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      </label>
+      <ReportFields />
+      <p class="error" role="alert" x-show="error" x-text="error" x-cloak></p>
+      <p class="notice" role="status" x-show="message" x-text="message" x-cloak></p>
+      <button
+        class="button button-accent"
+        x-bind:disabled="busy"
+        x-text="busy ? 'Saving…' : 'Save batch report'"
+      >
+        Save batch report
+      </button>
+    </form>
+  ) : (
+    <p>Create a competition to enter reports.</p>
+  )}
+</section>

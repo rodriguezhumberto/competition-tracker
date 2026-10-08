@@ -1,0 +1,40 @@
+---
+import { itemFilterErrorResponse } from '../lib/leaderboard.ts';
+import Layout from '../layouts/Layout.astro';
+import CompactCompetitionBoard from '../components/CompactCompetitionBoard.astro';
+import { currentCompetition, leaderboard } from '../lib/competition-store.ts';
+import '../styles/compact-dashboard.css';
+const competition = currentCompetition();
+let board;
+try {
+  board = competition
+    ? leaderboard(competition.id, {
+        metric: Astro.url.searchParams.get('metric'),
+        period: Astro.url.searchParams.get('period'),
+        item: Astro.url.searchParams.get('item'),
+        activityLimit: 12,
+      })
+    : null;
+} catch (error) {
+  const response = itemFilterErrorResponse(error, Astro.url);
+  if (response) return response;
+  throw error;
+}
+---
+
+<Layout title="Compact mockup">
+  <div class="compact-heading">
+    <h1>Leaderboard</h1>
+    <div>
+      <span class="pill">Compact layout · Mockup</span>
+      <a href="/">View main page ↗</a>
+    </div>
+  </div>
+  {board ? (
+    <CompactCompetitionBoard board={board} base="/mockup" />
+  ) : (
+    <div class="compact-dashboard">
+      <p class="empty-state">No competition available to preview.</p>
+    </div>
+  )}
+</Layout>

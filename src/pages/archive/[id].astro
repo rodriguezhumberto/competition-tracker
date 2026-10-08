@@ -1,0 +1,35 @@
+---
+import Icon from '../../components/Icon.astro';
+import Layout from '../../layouts/Layout.astro';
+import PowerHourLeaderboardDetail from '../../components/PowerHourLeaderboardDetail.astro';
+import { expireSessions, getArchivedSession, sessionScores } from '../../lib/store.ts';
+
+const id = Astro.params.id;
+if (!id || !/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id))) {
+  return new Response('Power Hour not found.', { status: 404 });
+}
+expireSessions();
+const session = getArchivedSession(Number(id));
+if (!session) return new Response('Power Hour not found.', { status: 404 });
+const scores = sessionScores(session.id);
+---
+
+<Layout title={session.name} active="archive">
+  <div class="page-heading">
+    <div>
+      <a class="competition-back" href="/archive">
+        <Icon name="arrow-left" /> Power Hour archive
+      </a>
+      <h1>
+        {session.name}
+        <span class="accent-dot">.</span>
+      </h1>
+      <p>
+        Power Hour · {new Date(session.created_at).toLocaleString('en-US', { timeZone: 'UTC' })} UTC
+        · Tracking {session.metric_label || 'points'}
+      </p>
+    </div>
+    <span class="pill">Archived</span>
+  </div>
+  <PowerHourLeaderboardDetail scores={scores} metricLabel={session.metric_label || 'points'} />
+</Layout>

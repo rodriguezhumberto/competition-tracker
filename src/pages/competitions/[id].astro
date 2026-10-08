@@ -1,0 +1,62 @@
+---
+import { itemFilterErrorResponse } from '../../lib/leaderboard.ts';
+import Layout from '../../layouts/Layout.astro';
+import CompetitionBoard from '../../components/CompetitionBoard.astro';
+import CompetitionEditor from '../../components/admin/CompetitionEditor.astro';
+import { getCompetitionForEditing, leaderboard } from '../../lib/competition-store.ts';
+import { isAdmin } from '../../lib/auth.ts';
+import { centralDate } from '../../lib/central-time.ts';
+if (!isAdmin(Astro.cookies)) return Astro.redirect('/admin/login');
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+const id = Number(Astro.params.id);
+if (!Number.isSafeInteger(id) || id <= 0)
+  return new Response('Competition not found.', { status: 404 });
+let competition;
+try {
+  competition = getCompetitionForEditing(id);
+} catch {
+  return new Response('Competition not found.', { status: 404 });
+}
+let board;
+try {
+  board = leaderboard(id, {
+    competition,
+    audience: 'admin',
+    metric: Astro.url.searchParams.get('metric'),
+    period: Astro.url.searchParams.get('period'),
+    item: Astro.url.searchParams.get('item'),
+  });
+} catch (error) {
+  const response = itemFilterErrorResponse(error, Astro.url);
+  if (response) return response;
+  throw error;
+}
+---
+
+<Layout title={competition.name} active="competitions">
+  <div class="page-heading">
+    <div>
+      <a class="competition-back" href="/competitions">
+        ← All competitions
+      </a>
+      <h1>
+        {competition.name}
+        <span class="accent-dot">.</span>
+      </h1>
+      <p>Admin dashboard · Includes private metrics</p>
+    </div>
+    <a class="button button-outline" href="/admin">
+      Enter reports
+    </a>
+  </div>
+  {Astro.url.searchParams.has('saved') && (
+    <p class="notice" role="status">
+      Competition settings saved.
+    </p>
+  )}
+  <CompetitionBoard board={board} admin />
+  <details class="competition-settings">
+    <summary>Edit metrics & report mapping</summary>
+    <CompetitionEditor initial={competition} today={centralDate()} />
+  </details>
+</Layout>

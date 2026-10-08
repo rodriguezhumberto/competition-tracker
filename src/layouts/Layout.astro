@@ -1,0 +1,147 @@
+---
+import Icon from '../components/Icon.astro';
+import '../styles/global.css';
+import { isAdmin } from '../lib/auth.ts';
+import DemoToolbar from '../components/DemoToolbar.astro';
+import { demoLink, type DemoState } from '../lib/demo-access.ts';
+import { isViewerCookieHeader } from '../lib/site-access.ts';
+interface Props {
+  title?: string;
+  active?: string;
+  demo?: DemoState;
+}
+const { title = 'Leaderboard', active = 'leaderboard', demo } = Astro.props;
+const inDemo = !!demo || Astro.url.pathname === '/demo' || Astro.url.pathname.startsWith('/demo/');
+const admin = !inDemo && isAdmin(Astro.cookies);
+const viewer = !inDemo && isViewerCookieHeader(Astro.request.headers.get('cookie') || undefined);
+const link = (path: string) =>
+  inDemo ? demoLink(path === '/' ? '/demo' : `/demo${path}`, Astro.url) : path;
+if (inDemo) Astro.response.headers.set('Cache-Control', 'private, no-store');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {inDemo && <meta name="robots" content="noindex, nofollow" />}
+    <script is:inline>
+      (() => {
+        const saved = localStorage.getItem('rally-theme');
+        const theme =
+          saved === 'light' || saved === 'dark'
+            ? saved
+            : matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+    <meta
+      name="description"
+      content="A little friendly competition. Track your team's progress and make every point count."
+    />
+    <title>{title} · Competition Tracker</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon-blue.svg" />
+  </head>
+  <body>
+    <a class="skip" href="#main">
+      Skip to content
+    </a>
+    <header class="site-header">
+      <a class="brand" href={link('/')} aria-label="Competition Tracker home">
+        <span class="brand-mark" aria-hidden="true">
+          <i></i>
+          <i></i>
+          <i></i>
+        </span>
+        Competition Tracker
+      </a>
+      <nav aria-label="Main navigation">
+        <a class:list={{ selected: active === 'leaderboard' }} href={link('/')}>
+          Leaderboard
+        </a>
+        {(admin || demo?.role === 'owner') && (
+          <a class:list={{ selected: active === 'competitions' }} href={link('/competitions')}>
+            Competitions
+          </a>
+        )}
+        <a class:list={{ selected: active === 'archive' }} href={link('/archive')}>
+          Power Hour Archive
+        </a>
+      </nav>
+      <div class="header-actions">
+        {viewer && !admin && (
+          <form action="/api/site-logout" method="POST">
+            <button class="header-control" type="submit">
+              Sign out
+            </button>
+          </form>
+        )}
+        <button
+          class="header-control theme-toggle"
+          type="button"
+          aria-label="Switch to dark mode"
+          title="Switch color theme"
+        >
+          <span class="theme-icon" aria-hidden="true">
+            ◐
+          </span>
+          <span class="theme-label">Light</span>
+        </button>
+        {(!inDemo || demo?.role === 'owner') && (
+          <a class:list={['admin-link', { selected: active === 'admin' }]} href={link('/admin')}>
+            <span aria-hidden="true">
+              <Icon name="cog" />
+            </span>{' '}
+            Admin{' '}
+            <span aria-hidden="true">
+              <Icon />
+            </span>
+          </a>
+        )}
+      </div>
+    </header>
+    <main id="main" data-demo-workspace={demo?.workspaceId}>
+      {demo && <DemoToolbar initial={demo} />}
+      <slot />
+    </main>
+    <footer>
+      <a class="footer-brand" href={link('/')}>
+        Competition Tracker
+      </a>
+      <span class="footer-disclaimer">
+        Independent project. Not an official company tool. <a href="/disclaimer">Disclaimer</a>
+      </span>
+      <a class="footer-privacy" href="/privacy">
+        Privacy policy
+      </a>
+    </footer>
+    <script>
+      import '../lib/client.ts';
+    </script>
+    <script is:inline>
+      (() => {
+        const button = document.querySelector('.theme-toggle');
+        const setTheme = (theme, persist = true) => {
+          document.documentElement.dataset.theme = theme;
+          if (persist) localStorage.setItem('rally-theme', theme);
+          button.setAttribute(
+            'aria-label',
+            `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`,
+          );
+          button.querySelector('.theme-label').textContent = theme === 'dark' ? 'Dark' : 'Light';
+          button.querySelector('.theme-icon').textContent = theme === 'dark' ? '☼' : '◐';
+        };
+        setTheme(document.documentElement.dataset.theme || 'light', false);
+        matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (event) => {
+          if (!localStorage.getItem('rally-theme'))
+            setTheme(event.matches ? 'dark' : 'light', false);
+        });
+        button.addEventListener('click', () =>
+          setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'),
+        );
+      })();
+    </script>
+  </body>
+</html>

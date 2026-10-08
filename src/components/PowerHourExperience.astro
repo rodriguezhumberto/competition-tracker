@@ -1,0 +1,122 @@
+---
+import Icon from './Icon.astro';
+import CompactCompetitionBoard from './CompactCompetitionBoard.astro';
+import PowerHourLobbyLeaderboard from './PowerHourLobbyLeaderboard.astro';
+import PowerHourControls from './PowerHourControls.astro';
+import type { leaderboard } from '../lib/competition-store.ts';
+import type { publicSnapshot, sessionScores } from '../lib/store.ts';
+interface Props {
+  board: ReturnType<typeof leaderboard> | null;
+  initial: {
+    session: ReturnType<typeof publicSnapshot>['session'];
+    scores: ReturnType<typeof sessionScores>;
+    requiresPowerHourPassword?: boolean;
+  };
+  controller?: string;
+  base?: string;
+  demo?: boolean;
+  query?: Record<string, string>;
+}
+const {
+  board,
+  initial,
+  controller = 'powerHour',
+  base = '/',
+  demo = false,
+  query = {},
+} = Astro.props;
+---
+
+<div x-data={`${controller}(${JSON.stringify(initial)})`}>
+  <div class="compact-heading" x-show="!session || escaped">
+    <div>
+      <h1>Leaderboard</h1>
+    </div>
+  </div>
+  <div class="takeover-bar" x-show="session" x-cloak>
+    <span>
+      <span class="status-dot"></span>{' '}
+      <span x-text="ended ? 'POWER HOUR • FINAL RESULTS' : escaped ? 'POWER HOUR IS LIVE' : connected ? 'POWER HOUR LOBBY • CONNECTED' : 'POWER HOUR LOBBY • RECONNECTING'"></span>
+    </span>
+    <button class="text-button" x-on:click="escaped = !escaped">
+      <span x-text="escaped ? 'Back to Power Hour' : 'View main leaderboard'"></span> <Icon />
+    </button>
+  </div>
+  <section class="power-hour-live" x-show="session && !escaped" x-cloak>
+    <div class="power-hour-live-head">
+      <div>
+        <h2 x-text="session?.name"></h2>
+        <p x-show="!ended">
+          Tracking <span x-text="session?.metric_label"></span>
+        </p>
+        <p x-show="ended" role="status">
+          Power Hour complete! Final results stay here for two minutes before returning to the main
+          leaderboard.
+        </p>
+      </div>
+      <strong class="timer" x-text="ended ? 'Finished' : remaining"></strong>
+    </div>
+    {demo && (
+      <p class="power-hour-note" x-show="!joined && !ended">
+        The shared password is filled in for this demo. Enter your name to join.
+      </p>
+    )}
+    <form class="power-hour-join" x-on:submit.prevent="join()" x-show="!joined && !ended">
+      <label x-show={demo ? 'true' : 'requiresPowerHourPassword'}>
+        Shared password
+        <input
+          type="password"
+          x-model="password"
+          minlength="8"
+          maxlength="128"
+          x-bind:required={demo ? 'true' : 'requiresPowerHourPassword'}
+          x-bind:disabled={demo ? 'false' : '!requiresPowerHourPassword'}
+          autocomplete="off"
+        />
+      </label>
+      <label>
+        Your name
+        <input
+          x-model="name"
+          maxlength="20"
+          placeholder="Alex Morgan"
+          required
+          autocomplete="name"
+        />
+      </label>
+      <button class="button button-accent" x-bind:disabled="!connected || joining">
+        <span x-text="joining ? 'Joining…' : 'Join the Power Hour'"></span>
+        <span x-show="!joining">
+          <Icon />
+        </span>
+      </button>
+      <p class="error" x-show="error" x-text="error" role="alert"></p>
+    </form>
+    <p class="power-hour-note" x-show="ended && !joined">
+      The Power Hour has ended. Participants can still view their final standings from the browser
+      they joined with.
+    </p>
+    <div class="live-grid" x-show="joined">
+      <PowerHourLobbyLeaderboard />
+      <PowerHourControls />
+    </div>
+    <p class="power-hour-note">
+      A fresh start, just for fun. Power Hour scores are archived separately from the main
+      leaderboard.
+    </p>
+  </section>
+  <div x-show="!session || escaped">
+    {board ? (
+      <CompactCompetitionBoard
+        board={board}
+        base={base}
+        query={query}
+        activityBase={demo ? '/demo/activity' : '/activity'}
+      />
+    ) : (
+      <section class="rankings top-operators compact-dashboard">
+        <p class="empty-state">No progress reports in this period yet.</p>
+      </section>
+    )}
+  </div>
+</div>

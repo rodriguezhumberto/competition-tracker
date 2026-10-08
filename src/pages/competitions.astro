@@ -1,0 +1,37 @@
+---
+import Icon from '../components/Icon.astro';
+import Layout from '../layouts/Layout.astro';
+import { isAdmin } from '../lib/auth.ts';
+import { getCompetitions } from '../lib/store.ts';
+if (!isAdmin(Astro.cookies)) return Astro.redirect('/admin/login');
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+const competitions = getCompetitions();
+---
+
+<Layout title="Competitions" active="competitions">
+  <div class="page-heading">
+    <div>
+      <h1>Competitions</h1>
+    </div>
+  </div>
+  <div class="archive-grid">
+    {competitions.map((c) => (
+      <a
+        class="panel archive-card competition-card"
+        href={`/competitions/${c.id}`}
+        aria-label={`View ${c.name} standings`}
+      >
+        <span class="pill">{c.is_active ? 'Active competition' : 'Competition'}</span>
+        <h2>{c.name}</h2>
+        <p>
+          {c.start_date} — {c.end_date}
+        </p>
+        <div class="eyebrow">OFFICIAL RANKING: {c.metric_label.toUpperCase()}</div>
+        <span class="competition-card-action">
+          View standings <Icon />
+        </span>
+      </a>
+    ))}
+  </div>
+  {!competitions.length && <div class="panel empty-state">No competitions yet.</div>}
+</Layout>

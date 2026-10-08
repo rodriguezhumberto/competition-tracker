@@ -1,0 +1,22 @@
+---
+import CompetitionEditor from './CompetitionEditor.astro';
+import type { getCompetitionConfigurations } from '../../lib/competition-store.ts';
+interface Props {
+  today: string;
+  hasActiveCompetition: boolean;
+  templates: ReturnType<typeof getCompetitionConfigurations>;
+  saveUrl?: string;
+  successBase?: string;
+  allowSample?: boolean;
+}
+const { today, hasActiveCompetition, templates, saveUrl, successBase, allowSample } = Astro.props;
+---
+
+<CompetitionEditor
+  today={today}
+  activate={!hasActiveCompetition}
+  templates={templates}
+  saveUrl={saveUrl}
+  successBase={successBase}
+  allowSample={allowSample}
+/>

@@ -1,0 +1,260 @@
+---
+import CompactStandings from './CompactStandings.astro';
+import { formatMetric } from '../lib/metrics.ts';
+import { zonedClock } from '../lib/report-time.ts';
+import type { leaderboard } from '../lib/competition-store.ts';
+import '../styles/compact-dashboard.css';
+interface Props {
+  board: ReturnType<typeof leaderboard>;
+  base?: string;
+  query?: Record<string, string>;
+  activityBase?: string;
+}
+const { board, base = '/', query = {}, activityBase = '/activity' } = Astro.props;
+const viewQuery = new URLSearchParams({
+  ...query,
+  metric: board.selected.key,
+  period: board.period,
+  ...(board.selectedItem ? { item: board.selectedItem } : {}),
+});
+const { competition } = board;
+const selected = board.selected;
+const rows = board.rows;
+const leader = rows.find((row) => row.rank === 1);
+const leaderCount = rows.filter((row) => row.rank === 1).length;
+const latestUpdate = rows.reduce(
+  (latest, row) => (!latest || Date.parse(row.updated) > Date.parse(latest) ? row.updated : latest),
+  '',
+);
+const today = zonedClock(competition.timezone).slice(0, 10);
+const ended = competition.end_date < today;
+const upcoming = competition.start_date > today;
+const daysLeft = Math.max(
+  0,
+  Math.round((Date.parse(competition.end_date) - Date.parse(today)) / 86400000),
+);
+const periodLabel =
+  board.period === 'day' ? 'Today' : board.period === 'week' ? 'This week' : 'Full competition';
+const reported = rows.filter((row) => row.rank !== null).length;
+const official = board.metrics.find(
+  (metric) => metric.key === competition.official_metric_key,
+)?.label;
+---
+
+<div class="compact-dashboard" data-competition-board>
+  <p class="error board-error" role="alert" hidden></p>
+  <section class="competition-banner compact-banner">
+    <div class="competition-info">
+      <div class="eyebrow">
+        {ended
+          ? 'COMPLETED COMPETITION'
+          : upcoming
+            ? 'UPCOMING COMPETITION'
+            : 'CURRENT COMPETITION'}
+      </div>
+      <h2>{competition.name}</h2>
+      <p>
+        {competition.start_date} — {competition.end_date} · Official ranking: {official}
+      </p>
+    </div>
+    <div class="compact-status">
+      {ended ? (
+        <>
+          <strong>Complete</strong>
+          <span>FINAL STANDINGS</span>
+        </>
+      ) : upcoming ? (
+        <>
+          <strong>Soon</strong>
+          <span>STARTING SOON</span>
+        </>
+      ) : (
+        <>
+          <strong>{daysLeft}</strong>
+          <span>DAYS TO GO</span>
+        </>
+      )}
+    </div>
+  </section>
+  <section class="stats-grid compact-stats" aria-label={`Competition overview · ${periodLabel}`}>
+    <div class="stat">
+      <span class="eyebrow">Total {selected.label.toLowerCase()}</span>
+      <div>
+        <strong>{formatMetric(board.total, selected)}</strong>
+        <span>{periodLabel}</span>
+      </div>
+    </div>
+    <div class="stat">
+      <span class="eyebrow">Participants</span>
+      <div>
+        <strong>{reported}</strong>
+        <span>
+          {rows.length - reported
+            ? `${rows.length - reported} awaiting reports`
+            : 'All participants reported'}
+        </span>
+      </div>
+    </div>
+    <div class="stat">
+      <span class="eyebrow">
+        {leaderCount > 1 ? 'Joint leaders' : 'Leader'} by {selected.label.toLowerCase()}
+      </span>
+      <div>
+        <strong>{leader ? `#${leader.operatorNumber}` : '—'}</strong>
+        <span>
+          {leader
+            ? `${formatMetric(leader.values[selected.key], selected)} ${selected.label.toLowerCase()}${leaderCount > 1 ? ' · tied for first' : ''}`
+            : 'Awaiting reports'}
+        </span>
+      </div>
+    </div>
+  </section>
+  {board.multipleItems && !board.selectedItem && (
+    <details class="item-coverage" data-item-coverage>
+      <summary>
+        Item reporting coverage · {board.items.filter((item) => item.updated).length}/
+        {board.items.length} reported in this period
+      </summary>
+      <ul>
+        {board.items.map((item) => (
+          <li>
+            {item.name}:{' '}
+            {item.updated
+              ? zonedClock(competition.timezone, new Date(item.updated)).replace('T', ' · ')
+              : 'No reports in this period'}
+          </li>
+        ))}
+      </ul>
+      <p>Combined scores retain each item’s accepted progress. Update times may differ.</p>
+    </details>
+  )}
+  <div class="compact-grid">
+    <section class="rankings compact-rankings" aria-label="Standings">
+      <div class="compact-board-head">
+        <div>
+          <h2>
+            {board.selectedItem
+              ? `${board.items.find((item) => item.code === board.selectedItem)?.name} standings`
+              : 'Standings'}
+          </h2>
+          <p>
+            {rows.length} participants · {periodLabel}
+          </p>
+        </div>
+        <form class="compact-controls" method="GET" action={base}>
+          {Object.entries(query).map(([name, value]) => (
+            <input type="hidden" name={name} value={value} />
+          ))}
+          <label>
+            Metric
+            <select name="metric" aria-label="Sort by metric">
+              {board.metrics.map((metric) => (
+                <option value={metric.key} selected={metric.key === selected.key}>
+                  {metric.label}
+                  {metric.key === competition.official_metric_key ? ' · Official' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Period
+            <select name="period" aria-label="Time period">
+              <option value="day" selected={board.period === 'day'}>
+                Day
+              </option>
+              <option value="week" selected={board.period === 'week'}>
+                Week
+              </option>
+              <option value="lifetime" selected={board.period === 'lifetime'}>
+                Competition
+              </option>
+            </select>
+          </label>
+          {board.multipleItems && (
+            <label>
+              {board.itemLabel}
+              <select name="item" aria-label="Filter by item">
+                <option value="" selected={!board.selectedItem}>
+                  All items
+                </option>
+                {board.items.map((item) => (
+                  <option value={item.code} selected={item.code === board.selectedItem}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <noscript>
+            <button>Apply</button>
+          </noscript>
+        </form>
+      </div>
+      <CompactStandings board={board} base={base} query={query} />
+      {!rows.length && <p class="empty-state">No progress reports in this period yet.</p>}
+      <div class="leaderboard-update">
+        {latestUpdate
+          ? `Leaderboard updated ${zonedClock(competition.timezone, new Date(latestUpdate)).replace('T', ' · ')} · ${competition.timezone}`
+          : 'Leaderboard awaiting reports'}
+      </div>
+      <div class="compact-foot">
+        <span>
+          {selected.direction === 'asc' ? 'Lower' : 'Higher'} {selected.label.toLowerCase()} ranks
+          first · Ties share a rank · Missing values unranked
+        </span>
+        <a data-board-link aria-label="Refresh standings" href={`${base}?${viewQuery}`}>
+          Refresh ↻
+        </a>
+      </div>
+      {(board.selectedItem || selected.key !== competition.official_metric_key) && (
+        <p class="official-note">
+          Official competition ranking remains {official}
+          {board.multipleItems ? ' across all items' : ''}.
+        </p>
+      )}
+    </section>
+    <aside class="activity-card compact-activity">
+      <div class="activity-heading">
+        <h3>Latest moves</h3>
+        <p>{selected.label} · Most recent reports</p>
+      </div>
+      {board.updates.map((update, index) => (
+        <div class="compact-update" hidden={index >= 4}>
+          <div class="update-top">
+            <strong>
+              <span class="status-dot"></span>#{update.operatorNumber}
+            </strong>
+            <b>
+              {selected.mode !== 'latest' && !update.amount.startsWith('-') ? '+' : ''}
+              {formatMetric(update.amount, selected)}
+            </b>
+          </div>
+          <p>
+            {selected.mode === 'latest' ? 'Latest value recorded' : 'Report contribution'}
+            {board.multipleItems && ` · ${update.itemName}`}
+          </p>
+          <small>
+            {zonedClock(competition.timezone, new Date(update.timestamp)).replace('T', ' · ')}
+          </small>
+        </div>
+      ))}
+      {!board.updates.length && (
+        <p class="empty-state">Your team’s latest progress will appear here.</p>
+      )}
+      <a class="activity-history" href={`${activityBase}?${viewQuery}`}>
+        View report activity →
+      </a>
+    </aside>
+  </div>
+  <div class="compact-meta">
+    <span>Competition overview · {periodLabel}</span>
+    <span>
+      {competition.timezone} ·{' '}
+      {board.period === 'day'
+        ? 'Today'
+        : board.period === 'week'
+          ? 'Monday–Sunday'
+          : 'Competition dates'}
+    </span>
+  </div>
+</div>

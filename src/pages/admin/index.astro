@@ -1,0 +1,48 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import NewCompetitionForm from '../../components/admin/NewCompetitionForm.astro';
+import ManualReportForm from '../../components/admin/ManualReportForm.astro';
+import ReportUploadForm from '../../components/admin/ReportUploadForm.astro';
+import PowerHourAdmin from '../../components/admin/PowerHourAdmin.astro';
+import CompetitionList from '../../components/admin/CompetitionList.astro';
+import RecentReports from '../../components/admin/RecentReports.astro';
+import SitePrivacy from '../../components/admin/SitePrivacy.astro';
+import { isAdmin } from '../../lib/auth.ts';
+import { activeSession, sessionScores } from '../../lib/store.ts';
+import { getCompetitionConfigurations, recentMetricReports } from '../../lib/competition-store.ts';
+import { centralDate } from '../../lib/central-time.ts';
+
+if (!isAdmin(Astro.cookies)) return Astro.redirect('/admin/login');
+
+const competitions = getCompetitionConfigurations();
+const recent = recentMetricReports();
+const session = activeSession();
+const current = competitions.find((c) => c.is_active);
+const today = centralDate();
+---
+
+<AdminLayout>
+  {Astro.url.searchParams.get('error') && (
+    <p class="error" role="alert">
+      {Astro.url.searchParams.get('error')}
+    </p>
+  )}
+  {Astro.url.searchParams.has('success') && (
+    <p class="notice" role="status">
+      Saved. Your team is up to date.
+    </p>
+  )}
+  <PowerHourAdmin session={session} scores={session ? sessionScores(session.id) : []} />
+  <div class="admin-grid">
+    <NewCompetitionForm
+      templates={competitions}
+      today={today}
+      hasActiveCompetition={Boolean(current)}
+    />
+    <ManualReportForm competitions={competitions} />
+    <ReportUploadForm competitions={competitions} />
+  </div>
+  <CompetitionList competitions={competitions} />
+  <RecentReports recent={recent} />
+  <SitePrivacy />
+</AdminLayout>
