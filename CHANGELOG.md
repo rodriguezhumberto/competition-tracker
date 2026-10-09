@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Report-driven Power Hours with reviewed admin uploads, per-PLU baselines, combined scoring, and a read-only leaderboard.
+- Power Hour report history and confirmation of in-window reports after the countdown ends.
+
+### Fixed
+
+- Power Hour reports for different PLUs can arrive out of timestamp order; duplicate and older reports are rejected per PLU.
+
 ## 1.0.0 — 2026-10-08
 
 Initial version:

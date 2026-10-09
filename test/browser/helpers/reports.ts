@@ -3,7 +3,9 @@ import { centralDate } from '../../../src/lib/central-time.ts';
 import { newMetric } from '../../../src/lib/metrics.ts';
 
 export async function ensureReportCompetition(page: Page) {
-  const choices = page.locator('.report-upload select[name="competition_id"] option');
+  const choices = page.locator(
+    '.report-upload[data-report-workflow=competition] select[name="competition_id"] option',
+  );
   if ((await choices.count()) > 1) return;
   const response = await page.request.post('/api/competition', {
     headers: { Origin: new URL(page.url()).origin },

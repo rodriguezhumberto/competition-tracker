@@ -30,7 +30,7 @@ async function prepare(page: import('@playwright/test').Page) {
   );
   await page.context().addCookies(adminCookies);
   await page.goto('/admin');
-  return page.locator('.report-upload');
+  return page.locator('.report-upload[data-report-workflow=competition]');
 }
 
 test('suggested boundaries require review, can be adjusted or dismissed, and reach extraction', async ({

@@ -58,3 +58,13 @@ For competitions with **Track multiple items** enabled, extraction also returns 
 Review displays the original detected code alongside the configured item selector. An unfamiliar code does not automatically create an item. **Add item to competition** validates a name and code, preserves the current draft edits and original extraction, advances its revision and schema version, and requires renewed review before confirmation. Other drafts become stale after this configuration change.
 
 Transport uses `fetch`, base64 `image_url` content, and JSON mode. The requested prompt lives in `src/lib/vision.ts`; see the provider's [image input](https://developers.openai.com/api/docs/guides/images-vision?api-mode=chat) and [JSON mode](https://developers.openai.com/api/docs/guides/structured-outputs) references.
+
+### Report-driven Power Hours
+
+In Power Hour configuration, enable **Use admin-uploaded reports**. Scan or resume a report draft, review it, choose a public running-total/latest-value metric, and confirm the baseline to start. The printed report timestamp is the scoring start; the configured duration sets the cutoff. Additive amount metrics are unavailable because their reports are not cumulative totals.
+
+Updates reuse the image preparation, extraction, editable review, saved drafts, and confirmation workflow. They are stored in separate Power Hour history and never change competition standings. Each report must be newer than the last accepted report for its item and within the Power Hour window. The first report for another configured PLU establishes that item’s baseline without awarding points. Reports for different PLUs can share a timestamp or arrive out of timestamp order. **Add time** extends the cutoff repeatedly while the session is live. The admin can finish confirming an in-window final report after expiry, using the archived report controls.
+
+Scores sum each item’s latest cumulative total minus its baseline. Operators with zero gain are hidden; an unchanged or omitted operator retains any previously earned score. Each operator needs a baseline for each item; missing baselines and decreases are rejected with review instructions. Updates must use their item’s baseline reporting period, so counter resets and cross-day running totals require a new Power Hour. Report configuration cannot be edited while its Power Hour is live; changing it afterward requires a new session for further uploads.
+
+Viewers watch the same bar leaderboard without entering a name or Power Hour password, and without increment controls. Site privacy still applies. Accepted source images, report history, and archives use the existing retention rules.

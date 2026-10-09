@@ -23,7 +23,7 @@ test('automatic rotation, uncertain suggestions, unavailable detection and manua
   };
   await page.route('**/api/orientation', (route) => route.fulfill({ json: result }));
   await login(page);
-  const upload = page.locator('.report-upload');
+  const upload = page.locator('.report-upload[data-report-workflow=competition]');
   const orientation = upload.getByRole('status', { name: 'Report image orientation' });
   const detection = upload.getByRole('status', { name: 'Automatic orientation detection' });
   await upload.locator('input[type=file]').setInputFiles(file);
@@ -78,7 +78,7 @@ test('late detection never overrides manual rotation or a replacement file', asy
     });
   });
   await login(page);
-  const upload = page.locator('.report-upload');
+  const upload = page.locator('.report-upload[data-report-workflow=competition]');
   await upload.locator('input[type=file]').setInputFiles(file);
   await expect(
     upload.getByRole('status', { name: 'Automatic orientation detection' }),

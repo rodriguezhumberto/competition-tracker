@@ -1,4 +1,7 @@
 ---
+import { db } from '../../db/index.ts';
+import { power_hour_sessions, competition_metrics } from '../../db/schema.ts';
+import { eq } from 'drizzle-orm';
 import type { sessionScores } from '../../lib/store.ts';
 
 interface Props {
@@ -9,11 +12,26 @@ interface Props {
 }
 
 const { sessionId, metricLabel, scores, controller } = Astro.props;
+// Demo controllers supply their own state outside the database request scope.
+const session = controller
+  ? null
+  : db.select().from(power_hour_sessions).where(eq(power_hour_sessions.id, sessionId)).get();
+const metric =
+  session?.report_mode && session.report_metric_id
+    ? db
+        .select()
+        .from(competition_metrics)
+        .where(eq(competition_metrics.id, session.report_metric_id))
+        .get()
+    : null;
 ---
 
 <section
   class="rankings power-hour-admin-leaderboard"
-  x-data={controller || `adminPowerHourLeaderboard(${JSON.stringify({ sessionId, scores })})`}
+  x-data={
+    controller ||
+    `adminPowerHourLeaderboard(${JSON.stringify({ sessionId, scores, metric, archived: session?.status === 'archived' })})`
+  }
   aria-label="Live Power Hour leaderboard"
 >
   <div class="section-heading">
@@ -73,7 +91,7 @@ const { sessionId, metricLabel, scores, controller } = Astro.props;
               </span>
             </td>
             <td class="score-col">
-              <strong x-text="person.clicks"></strong>
+              <strong x-text={metric ? 'formatScore(person.clicks)' : 'person.clicks'}></strong>
             </td>
           </tr>
         </template>
@@ -81,7 +99,7 @@ const { sessionId, metricLabel, scores, controller } = Astro.props;
     </table>
   </div>
   <div class="empty-state" x-show="scores.length === 0">
-    Waiting for participants to join.
+    {session?.report_mode ? 'No progress yet.' : 'Waiting for participants to join.'}
   </div>
   <div class="table-foot">
     <span>
@@ -90,6 +108,10 @@ const { sessionId, metricLabel, scores, controller } = Astro.props;
         Connecting to live scores…
       </span>
     </span>
-    <span>Review flag: more than 10 entries in 60 seconds.</span>
+    <span>
+      {session?.report_mode
+        ? 'Change from baseline'
+        : 'Review flag: more than 10 entries in 60 seconds.'}
+    </span>
   </div>
 </section>

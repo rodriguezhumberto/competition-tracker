@@ -1,4 +1,5 @@
 ---
+import { formatPowerHourScore, type PowerHourMetricFormat } from '../lib/power-hour-format.ts';
 interface Score {
   userId: number;
   name: string;
@@ -9,9 +10,11 @@ interface Score {
 interface Props {
   scores: Score[];
   metricLabel: string;
+  metric?: PowerHourMetricFormat | null;
+  reportMode?: boolean;
 }
 
-const { scores, metricLabel } = Astro.props;
+const { scores, metricLabel, metric, reportMode } = Astro.props;
 const leaderTotal = scores[0]?.clicks || 0;
 ---
 
@@ -71,7 +74,7 @@ const leaderTotal = scores[0]?.clicks || 0;
                   {score.flagged && <small> · review entry rate</small>}
                 </td>
                 <td class="score-col">
-                  <strong>{score.clicks}</strong>
+                  <strong>{formatPowerHourScore(score.clicks, metric)}</strong>
                 </td>
                 <td class="progress-col">
                   <div class="rank-progress">
@@ -87,7 +90,9 @@ const leaderTotal = scores[0]?.clicks || 0;
       </table>
     </div>
   ) : (
-    <div class="empty-state">No participants joined this Power Hour.</div>
+    <div class="empty-state">
+      {reportMode ? 'No progress recorded.' : 'No participants joined this Power Hour.'}
+    </div>
   )}
   <div class="table-foot">
     <span>

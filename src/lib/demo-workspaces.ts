@@ -171,10 +171,12 @@ export function resetDemoWorkspace(id: string): void {
           'report_drafts',
           'entries',
           'reports',
-          'competition_metrics',
+          'power_hour_report_values',
+          'power_hour_reports',
           'power_hour_scores',
           'power_hour_participants',
           'power_hour_sessions',
+          'competition_metrics',
           'users',
           'competitions',
         ];

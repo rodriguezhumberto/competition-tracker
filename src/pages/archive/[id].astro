@@ -1,6 +1,7 @@
 ---
 import Icon from '../../components/Icon.astro';
 import Layout from '../../layouts/Layout.astro';
+import { getCompetition } from '../../lib/competition-config.ts';
 import PowerHourLeaderboardDetail from '../../components/PowerHourLeaderboardDetail.astro';
 import { expireSessions, getArchivedSession, sessionScores } from '../../lib/store.ts';
 
@@ -31,5 +32,16 @@ const scores = sessionScores(session.id);
     </div>
     <span class="pill">Archived</span>
   </div>
-  <PowerHourLeaderboardDetail scores={scores} metricLabel={session.metric_label || 'points'} />
+  <PowerHourLeaderboardDetail
+    scores={scores}
+    metricLabel={session.metric_label || 'points'}
+    reportMode={session.report_mode}
+    metric={
+      session.report_mode && session.competition_id
+        ? getCompetition(session.competition_id).metrics.find(
+            (metric) => metric.id === session.report_metric_id,
+          )
+        : null
+    }
+  />
 </Layout>

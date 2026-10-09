@@ -1,6 +1,13 @@
-import { asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, gt } from 'drizzle-orm';
 import { db, sqlite } from '../db/index.ts';
-import { competitions, competition_metrics, report_values, reports } from '../db/schema.ts';
+import {
+  competitions,
+  competition_metrics,
+  report_values,
+  reports,
+  power_hour_reports,
+  power_hour_sessions,
+} from '../db/schema.ts';
 import { dateOnly, ensure, label, positiveId } from './validation.ts';
 import { validateMetrics, validateProfile } from './metrics.ts';
 import { itemConfiguration, type TrackedItem } from './tracked-items.ts';
@@ -85,6 +92,21 @@ export function updateCompetition(input: Record<string, unknown>) {
     .transaction(() => {
       const c = getCompetitionForEditing(input.competition_id);
       ensure(
+        !db
+          .select({ id: power_hour_sessions.id })
+          .from(power_hour_sessions)
+          .where(
+            and(
+              eq(power_hour_sessions.competition_id, c.id),
+              eq(power_hour_sessions.report_mode, true),
+              eq(power_hour_sessions.status, 'active'),
+              gt(power_hour_sessions.ends_at, new Date().toISOString()),
+            ),
+          )
+          .get(),
+        'This report configuration is in use by a live Power Hour. End the Power Hour before editing it.',
+      );
+      ensure(
         Number(input.schema_version) === c.schema_version,
         'Competition settings changed. Reload before editing.',
       );
@@ -94,11 +116,8 @@ export function updateCompetition(input: Record<string, unknown>) {
         items: c.items,
         ...input,
       });
-      const usedReports = db
-        .select({ code: reports.item_code })
-        .from(reports)
-        .where(eq(reports.competition_id, c.id))
-        .all();
+      const usedReports = c.usedItemCodes.map((code) => ({ code }));
+      if (c.hasReports && !usedReports.length) usedReports.push({ code: '' });
       ensure(
         !usedReports.length || items.multiple_items === c.multiple_items,
         'Tracking multiple items is locked after reports exist.',
@@ -184,11 +203,28 @@ export function getCompetitionForEditing(id: unknown) {
     .from(reports)
     .where(eq(reports.competition_id, competition.id))
     .all();
+  const powerHourMetrics = db
+    .selectDistinct({ key: competition_metrics.key })
+    .from(power_hour_sessions)
+    .innerJoin(
+      competition_metrics,
+      eq(power_hour_sessions.report_metric_id, competition_metrics.id),
+    )
+    .where(eq(power_hour_sessions.competition_id, competition.id))
+    .all();
+  const powerHourItems = db
+    .selectDistinct({ code: power_hour_reports.item_code })
+    .from(power_hour_reports)
+    .innerJoin(power_hour_sessions, eq(power_hour_reports.session_id, power_hour_sessions.id))
+    .where(eq(power_hour_sessions.competition_id, competition.id))
+    .all();
   return {
     ...competition,
-    lockedMetricKeys: used.map((metric) => metric.key),
-    hasReports: usedReports.length > 0,
-    usedItemCodes: usedReports.map((report) => report.code).filter(Boolean),
+    lockedMetricKeys: [...new Set([...used, ...powerHourMetrics].map((metric) => metric.key))],
+    hasReports: usedReports.length > 0 || powerHourItems.length > 0,
+    usedItemCodes: [
+      ...new Set([...usedReports, ...powerHourItems].map((report) => report.code).filter(Boolean)),
+    ],
   };
 }
 

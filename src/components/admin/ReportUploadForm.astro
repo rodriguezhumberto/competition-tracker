@@ -5,21 +5,33 @@ import { listPendingDrafts } from '../../lib/draft-store.ts';
 import ReportFields from './ReportFields.astro';
 interface Props {
   competitions: ReturnType<typeof getCompetitions>;
+  mode?: 'baseline' | 'power-hour';
+  sessionId?: number;
+  suggestedName?: string;
 }
-const { competitions } = Astro.props;
+const { competitions, mode, sessionId, suggestedName } = Astro.props;
 const drafts = listPendingDrafts();
 ---
 
 <section
   data-competition-admin
+  data-report-workflow={mode || 'competition'}
   class="panel report-upload"
-  x-data={`reportUpload(${JSON.stringify(drafts)})`}
+  x-data={`reportUpload(${JSON.stringify(drafts)}, ${JSON.stringify({ mode, sessionId, name: suggestedName })})`}
 >
-  <h2>Scan a batch progress report</h2>
-  <p>
-    Extract your configured metrics, review the values alongside the image, then confirm to save.
-  </p>
-  <div class="pending-drafts" x-show="!report">
+  <h2>
+    {mode === 'baseline'
+      ? 'Upload baseline'
+      : mode === 'power-hour'
+        ? 'Upload update'
+        : 'Scan a batch progress report'}
+  </h2>
+  {!mode && (
+    <p>
+      Extract your configured metrics, review the values alongside the image, then confirm to save.
+    </p>
+  )}
+  <div class="pending-drafts" x-show={mode ? '!report && drafts.length' : '!report'}>
     <h3>Pending drafts</h3>
     <p x-show="!drafts.length">No pending drafts.</p>
     <ul>
@@ -81,9 +93,51 @@ const drafts = listPendingDrafts();
   <template x-if="report">
     <form class="report-preview" x-on:submit.prevent="confirm()">
       <h3>Review extracted report</h3>
+      {mode === 'baseline' && (
+        <fieldset>
+          <legend>Power Hour configuration</legend>
+          <label>
+            Power Hour name <input x-model="powerHourName" maxlength="80" required />
+          </label>
+          <label>
+            Duration (minutes){' '}
+            <input x-model="powerHourDuration" type="number" min="1" max="1440" step="1" required />
+          </label>
+          <label>
+            Tracked metric
+            <select x-model="powerHourMetric" required>
+              <option value="">Choose a running-total metric</option>
+              <template
+                x-for="metric in metrics.filter(metric => metric.public && metric.mode !== 'additive')"
+                x-bind:key="metric.id"
+              >
+                <option x-bind:value="String(metric.id)" x-text="metric.label"></option>
+              </template>
+            </select>
+          </label>
+          <p>
+            The report timestamp starts the countdown. Scores track increases from this baseline.
+          </p>
+        </fieldset>
+      )}
+      {mode === 'power-hour' && (
+        <details>
+          <summary>Report requirements</summary>
+          <p>
+            Each item’s first report sets its baseline. Later reports need a newer timestamp for
+            that item.
+          </p>
+          <p>
+            Use that item’s baseline period. Totals cannot decrease. Reports must fall within the
+            Power Hour.
+          </p>
+          <p>Reports from within the window can be confirmed after it ends.</p>
+        </details>
+      )}
       <p>
-        Correct missing or misread fields. Save draft to keep edits for later; scores change only
-        after confirmation.
+        {mode
+          ? 'Review the values before confirming.'
+          : 'Correct missing or misread fields. Save draft to keep edits for later; scores change only after confirmation.'}
       </p>
       <p x-text="'Expires '+centralReportTime(new Date(expiresAt).toISOString())"></p>
       <p class="error" role="alert" x-show="schemaChanged">
@@ -140,7 +194,7 @@ const drafts = listPendingDrafts();
         </p>
       </div>
       <ReportFields />
-      <div class="setup-field" x-show="multipleItems" x-cloak>
+      <div class="setup-field" x-show="multipleItems && uploadMode === 'competition'" x-cloak>
         <button
           type="button"
           class="text-button"
@@ -197,7 +251,7 @@ const drafts = listPendingDrafts();
         <button
           class="button button-accent"
           x-bind:disabled="busy || !reviewed || schemaChanged || needsItemSelection"
-          x-text="busy ? 'Saving…' : 'Confirm & save report'"
+          x-text="busy ? 'Saving…' : uploadMode === 'baseline' ? 'Start Power Hour' : uploadMode === 'power-hour' ? 'Confirm update' : 'Confirm & save report'"
         >
           Confirm &amp; save report
         </button>

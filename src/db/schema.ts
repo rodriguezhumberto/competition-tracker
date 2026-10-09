@@ -93,6 +93,11 @@ export const power_hour_sessions = sqliteTable(
       .$defaultFn(() => new Date().toISOString()),
     ends_at: text('ends_at').notNull(),
     password_hash: text('password_hash'),
+    report_mode: integer('report_mode', { mode: 'boolean' }).notNull().default(false),
+    report_metric_id: integer('report_metric_id').references(() => competition_metrics.id),
+    report_metric_precision: integer('report_metric_precision').notNull().default(0),
+    report_schema_version: integer('report_schema_version'),
+    report_profile_version: integer('report_profile_version'),
   },
   (t) => [
     uniqueIndex('one_active_power_hour')
@@ -219,4 +224,34 @@ export const report_drafts = sqliteTable(
     cleanup_error: text('cleanup_error'),
   },
   (t) => [index('drafts_by_status_expiry').on(t.status, t.expires_at)],
+);
+
+// Isolated snapshots: Power Hour uploads never contribute to competition standings.
+export const power_hour_reports = sqliteTable(
+  'power_hour_reports',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    session_id: integer('session_id')
+      .notNull()
+      .references(() => power_hour_sessions.id),
+    timestamp: text('timestamp').notNull(),
+    period_start: text('period_start').notNull(),
+    period_end: text('period_end').notNull(),
+    item_code: text('item_code').notNull().default(''),
+    proof_image_path: text('proof_image_path'),
+  },
+  (t) => [uniqueIndex('power_hour_report_timestamp').on(t.session_id, t.item_code, t.timestamp)],
+);
+
+export const power_hour_report_values = sqliteTable(
+  'power_hour_report_values',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    report_id: integer('report_id')
+      .notNull()
+      .references(() => power_hour_reports.id),
+    operator_number: text('operator_number').notNull(),
+    value: integer('value').notNull(),
+  },
+  (t) => [uniqueIndex('power_hour_operator_per_report').on(t.report_id, t.operator_number)],
 );

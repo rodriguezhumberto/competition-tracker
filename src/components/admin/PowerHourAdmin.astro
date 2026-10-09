@@ -1,8 +1,11 @@
 ---
 import Icon from '../Icon.astro';
+import ReportUploadForm from './ReportUploadForm.astro';
+import { getCompetitions, getArchives } from '../../lib/store.ts';
+import { powerHourReportHistory } from '../../lib/power-hour-reports.ts';
 import type { activeSession } from '../../lib/store.ts';
 import PowerHourLiveLeaderboard from './PowerHourLiveLeaderboard.astro';
-import type { sessionScores } from '../../lib/store.ts';
+import { sessionScores } from '../../lib/store.ts';
 import { suggestedPowerHourName } from '../../lib/power-hour-name.ts';
 
 interface Props {
@@ -11,6 +14,16 @@ interface Props {
 }
 
 const { session, scores } = Astro.props;
+const archives = getArchives().filter((item) => item.report_mode);
+const archiveId = Number(Astro.url.searchParams.get('power_hour_session'));
+const reportSession =
+  archives.find((item) => item.id === archiveId) ??
+  (session?.report_mode ? session : !session ? archives[0] : undefined);
+const history = reportSession ? powerHourReportHistory(reportSession.id) : [];
+const reportCompetitions = getCompetitions();
+const baselineIds = new Map<string, number>();
+for (const report of [...history].reverse())
+  if (!baselineIds.has(report.item_code)) baselineIds.set(report.item_code, report.id);
 const scheduledEnd = session
   ? new Date(
       Date.parse(session.ends_at || session.created_at) + (session.ends_at ? 0 : 3600000),
@@ -18,14 +31,19 @@ const scheduledEnd = session
   : '';
 ---
 
-<section class="power-hour-admin" id="power-hour">
+<section
+  class="power-hour-admin"
+  id="power-hour"
+  x-data="{ reportMode: new URLSearchParams(location.search).has('power_hour_baseline_draft') }"
+  x-bind:class="{ 'report-configuration': reportMode }"
+>
   <div>
     <h2>{session ? session.name + ' is live.' : 'Start a Power Hour'}</h2>
-    <p>
-      {session
-        ? `Tracking ${session.metric_label || 'points'}. Scheduled to end ${scheduledEnd}. Add time whenever you need to.`
-        : 'Choose what to track and how long the scoreboard runs. Share the password with anyone you want to join.'}
-    </p>
+    {session && (
+      <p>
+        {session.metric_label || 'points'} · Ends {scheduledEnd}
+      </p>
+    )}
   </div>
   {session ? (
     <div>
@@ -62,58 +80,72 @@ const scheduledEnd = session
       </form>
     </div>
   ) : (
-    <form action="/api/admin" method="POST">
-      <input type="hidden" name="action" value="start" />
-      <label for="power-hour-name">
-        Power Hour name
-        <input
-          id="power-hour-name"
-          name="name"
-          value={suggestedPowerHourName()}
-          maxlength="80"
-          required
-        />
+    <div>
+      <label class="checkbox">
+        <input type="checkbox" role="switch" x-model="reportMode" />
+        Use admin-uploaded reports
       </label>
-      <label for="power-hour-metric">
-        What are you tracking?
-        <input
-          id="power-hour-metric"
-          name="metric_label"
-          value="points"
-          placeholder="Surveys, sales…"
-          maxlength="80"
-          required
+      <div x-show="reportMode" x-cloak>
+        <ReportUploadForm
+          competitions={reportCompetitions}
+          mode="baseline"
+          suggestedName={suggestedPowerHourName()}
         />
-      </label>
-      <label for="power-hour-duration">
-        Duration (minutes)
-        <input
-          id="power-hour-duration"
-          name="duration_minutes"
-          type="number"
-          min="1"
-          max="1440"
-          step="1"
-          value="60"
-          required
-        />
-      </label>
-      <label for="power-hour-password">
-        Shared password
-        <input
-          id="power-hour-password"
-          name="password"
-          type="password"
-          minlength="8"
-          maxlength="128"
-          autocomplete="new-password"
-          required
-        />
-      </label>
-      <button class="button button-accent">
-        Start Power Hour <span>ϟ</span>
-      </button>
-    </form>
+      </div>
+      <form action="/api/admin" method="POST" x-show="!reportMode">
+        <input type="hidden" name="action" value="start" />
+        <label for="power-hour-name">
+          Power Hour name
+          <input
+            id="power-hour-name"
+            name="name"
+            value={suggestedPowerHourName()}
+            maxlength="80"
+            required
+          />
+        </label>
+        <label for="power-hour-metric">
+          What are you tracking?
+          <input
+            id="power-hour-metric"
+            name="metric_label"
+            value="points"
+            placeholder="Surveys, sales…"
+            maxlength="80"
+            required
+          />
+        </label>
+        <label for="power-hour-duration">
+          Duration (minutes)
+          <input
+            id="power-hour-duration"
+            name="duration_minutes"
+            type="number"
+            min="1"
+            max="1440"
+            step="1"
+            value="60"
+            required
+          />
+        </label>
+        <label for="power-hour-password">
+          Shared password
+          <input
+            id="power-hour-password"
+            name="password"
+            type="password"
+            minlength="8"
+            maxlength="128"
+            autocomplete="new-password"
+            x-bind:required="!reportMode"
+            x-bind:disabled="reportMode"
+          />
+        </label>
+        <button class="button button-accent">
+          Start Power Hour <span>ϟ</span>
+        </button>
+      </form>
+    </div>
   )}
 </section>
 {session && (
@@ -123,3 +155,66 @@ const scheduledEnd = session
     scores={scores}
   />
 )}
+
+{reportSession && (
+  <section class="panel" aria-label="Power Hour reports">
+    <h2>
+      {reportSession.name} · {reportSession.status === 'active' ? 'Reports' : 'Archived'}
+    </h2>
+    <p>
+      Window: {new Date(reportSession.created_at).toLocaleString()} to{' '}
+      {new Date(reportSession.ends_at).toLocaleString()}.
+    </p>
+    {archives.length > 0 && (
+      <form action="/admin" method="GET">
+        <label>
+          Archived Power Hour{' '}
+          <select name="power_hour_session">
+            {archives.map((item) => (
+              <option value={item.id} selected={item.id === reportSession.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button class="button button-outline">View reports</button>
+      </form>
+    )}
+    <h3>Report history</h3>
+    <ol>
+      {history.map((report) => (
+        <li>
+          {baselineIds.get(report.item_code) === report.id ? 'Baseline' : 'Update'}{' '}
+          {report.item_code && `· PLU ${report.item_code}`} ·{' '}
+          {new Date(report.timestamp).toLocaleString()}{' '}
+          {report.proof_image_path && (
+            <a href={`/api/proof?power_hour_report=${report.id}`} target="_blank" rel="noreferrer">
+              View image
+            </a>
+          )}
+        </li>
+      ))}
+    </ol>
+    <ReportUploadForm
+      competitions={reportCompetitions.filter((item) => item.id === reportSession.competition_id)}
+      mode="power-hour"
+      sessionId={reportSession.id}
+    />
+    {reportSession.status === 'archived' && (
+      <PowerHourLiveLeaderboard
+        sessionId={reportSession.id}
+        metricLabel={reportSession.metric_label}
+        scores={sessionScores(reportSession.id)}
+      />
+    )}
+  </section>
+)}
+
+<style>
+  .power-hour-admin.report-configuration {
+    display: block;
+  }
+  .report-configuration :global(.report-upload) {
+    margin-top: 20px;
+  }
+</style>

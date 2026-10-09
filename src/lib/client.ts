@@ -1,6 +1,7 @@
 import './competition-board-client.ts';
 import { initCompactStandings } from './compact-standings-client.ts';
 import Alpine from 'alpinejs';
+import { formatPowerHourScore, type PowerHourMetricFormat } from './power-hour-format.ts';
 interface Player {
   userId: number;
   name: string;
@@ -15,6 +16,8 @@ interface Session {
   ends_at: string;
   status: 'active' | 'ended';
   results_until: string;
+  report_mode?: boolean;
+  report_metric?: PowerHourMetricFormat | null;
 }
 interface State {
   session: Session | null;
@@ -186,6 +189,7 @@ Alpine.data('powerHour', (initial: State) => ({
   },
   tap() {
     if (
+      this.session?.report_mode ||
       !this.connected ||
       !this.confirmed ||
       !this.joined ||
@@ -196,6 +200,9 @@ Alpine.data('powerHour', (initial: State) => ({
       return;
     this.error = '';
     this.socket?.send(JSON.stringify({ action: 'increment', sessionId: this.session.id }));
+  },
+  formatScore(value: number): string {
+    return formatPowerHourScore(value, this.session?.report_metric);
   },
   get ended(): boolean {
     return this.session?.status === 'ended';
@@ -211,42 +218,53 @@ Alpine.data('powerHour', (initial: State) => ({
     this.socket?.close();
   },
 }));
-Alpine.data('adminPowerHourLeaderboard', (initial: { sessionId: number; scores: Player[] }) => ({
-  scores: initial.scores,
-  connected: false,
-  socket: null as WebSocket | null,
-  retry: 0,
-  stopped: false,
-  init() {
-    this.connect();
-  },
-  connect() {
-    clearTimeout(this.retry);
-    const ws = new WebSocket(
-      `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`,
-    );
-    this.socket = ws;
-    ws.onopen = () => {
-      this.connected = true;
-    };
-    ws.onmessage = (message) => {
-      if (this.socket !== ws) return;
-      const data = JSON.parse(message.data);
-      if ('session' in data)
-        this.scores = data.session?.id === initial.sessionId ? data.scores : [];
-    };
-    ws.onclose = () => {
-      if (this.socket !== ws) return;
-      this.connected = false;
-      if (!this.stopped) this.retry = window.setTimeout(() => this.connect(), 2000);
-    };
-  },
-  destroy() {
-    this.stopped = true;
-    clearTimeout(this.retry);
-    this.socket?.close();
-  },
-}));
+Alpine.data(
+  'adminPowerHourLeaderboard',
+  (initial: {
+    sessionId: number;
+    scores: Player[];
+    metric?: PowerHourMetricFormat | null;
+    archived?: boolean;
+  }) => ({
+    formatScore(value: number): string {
+      return formatPowerHourScore(value, initial.metric);
+    },
+    scores: initial.scores,
+    connected: false,
+    socket: null as WebSocket | null,
+    retry: 0,
+    stopped: false,
+    init() {
+      this.connect();
+    },
+    connect() {
+      clearTimeout(this.retry);
+      const ws = new WebSocket(
+        `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`,
+      );
+      this.socket = ws;
+      ws.onopen = () => {
+        this.connected = true;
+      };
+      ws.onmessage = (message) => {
+        if (this.socket !== ws) return;
+        const data = JSON.parse(message.data);
+        if ('session' in data && (!initial.archived || data.session?.id === initial.sessionId))
+          this.scores = data.session?.id === initial.sessionId ? data.scores : [];
+      };
+      ws.onclose = () => {
+        if (this.socket !== ws) return;
+        this.connected = false;
+        if (!this.stopped) this.retry = window.setTimeout(() => this.connect(), 2000);
+      };
+    },
+    destroy() {
+      this.stopped = true;
+      clearTimeout(this.retry);
+      this.socket?.close();
+    },
+  }),
+);
 async function start() {
   if (document.querySelector('[data-demo-workspace]')) {
     const { registerDemo } = await import('./demo-client.ts');

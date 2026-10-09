@@ -22,6 +22,20 @@
       "when": 1791394095713,
       "tag": "0002_tracked_items",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791503803165,
+      "tag": "0003_power_hour_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791523421992,
+      "tag": "0004_power_hour_plu_timestamps",
+      "breakpoints": true
     }
   ]
 }

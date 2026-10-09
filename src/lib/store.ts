@@ -5,6 +5,7 @@ import {
   power_hour_sessions,
   power_hour_scores,
   power_hour_participants,
+  competition_metrics,
 } from '../db/schema.ts';
 import { ensure, label, participantName } from './validation.ts';
 import {
@@ -16,6 +17,11 @@ import {
   verifyPowerHourPassword,
 } from './auth.ts';
 import { events } from './events.ts';
+import {
+  preparePowerHourReport,
+  insertPowerHourReport,
+  reportSessionScores,
+} from './power-hour-reports.ts';
 import { getSitePrivacy, siteAccessAllowed } from './site-access.ts';
 
 export {
@@ -46,6 +52,12 @@ export function activeSession() {
   );
 }
 export function sessionScores(sessionId: number) {
+  const session = db
+    .select()
+    .from(power_hour_sessions)
+    .where(eq(power_hour_sessions.id, sessionId))
+    .get();
+  if (session?.report_mode) return reportSessionScores(sessionId, session.report_metric_precision);
   return db
     .select({
       userId: users.id,
@@ -85,6 +97,19 @@ function publicSession(session: NonNullable<ReturnType<typeof lobbySession>>) {
     id: session.id,
     name: session.name,
     metric_label: session.metric_label || 'points',
+    report_mode: session.report_mode,
+    report_metric:
+      session.report_mode && session.report_metric_id
+        ? (db
+            .select({
+              precision: competition_metrics.precision,
+              type: competition_metrics.type,
+              currency: competition_metrics.currency,
+            })
+            .from(competition_metrics)
+            .where(eq(competition_metrics.id, session.report_metric_id))
+            .get() ?? null)
+        : null,
     created_at: session.created_at,
     ends_at: endsAt,
     status: session.status === 'active' ? 'active' : 'ended',
@@ -101,7 +126,8 @@ export function snapshot() {
   return { session, scores: session ? sessionScores(session.id) : [] };
 }
 export function publicSnapshot() {
-  return { session: sessionState(), scores: [] };
+  const session = sessionState();
+  return { session, scores: session?.report_mode ? sessionScores(session.id) : [] };
 }
 export function sessionParticipants(sessionId: number) {
   return db
@@ -129,18 +155,46 @@ function durationMinutes(value: unknown) {
   return minutes;
 }
 export function startSession(input: Record<string, unknown>) {
-  ensure(validPowerHourPassword(input.password), 'Shared password must contain 8–128 characters.');
+  const reportMode = input.report_mode === 'on' || input.report_mode === true;
+  let passwordHash: string | null = null;
+  if (!reportMode) {
+    ensure(
+      validPowerHourPassword(input.password),
+      'Shared password must contain 8–128 characters.',
+    );
+    passwordHash = hashPowerHourPassword(input.password);
+  }
   const minutes = durationMinutes(input.duration_minutes ?? 60);
-  const passwordHash = hashPowerHourPassword(input.password);
   const session = sqlite
     .transaction(() => {
       ensure(!activeSession(), 'A Power Hour is already running.');
-      const now = Date.now();
-      return db
+      const prepared = reportMode ? preparePowerHourReport(input, true) : null;
+      const metric = prepared?.competition.metrics.find(
+        (m) => m.id === Number(input.report_metric_id),
+      );
+      if (reportMode) {
+        ensure(metric?.public, 'Choose a public report metric.');
+        ensure(
+          metric.mode !== 'additive',
+          'Choose a running-total or latest-value metric. Additive report amounts cannot be compared to a baseline.',
+        );
+      }
+      const now = prepared ? Date.parse(prepared.report.timestamp) : Date.now();
+      ensure(
+        now + minutes * 60000 > Date.now(),
+        'The baseline is too old for this duration. Upload a newer baseline or increase the duration.',
+      );
+      const saved = db
         .insert(power_hour_sessions)
         .values({
           name: label(input.name || 'Power Hour', 'Session name'),
-          metric_label: label(input.metric_label || 'points', 'Tracked metric'),
+          metric_label: metric?.label ?? label(input.metric_label || 'points', 'Tracked metric'),
+          report_mode: reportMode,
+          competition_id: prepared?.competition.id,
+          report_metric_id: metric?.id,
+          report_metric_precision: metric?.precision ?? 0,
+          report_schema_version: prepared?.competition.schema_version,
+          report_profile_version: prepared?.competition.profile_version,
           status: 'active',
           created_at: new Date(now).toISOString(),
           ends_at: new Date(now + minutes * 60000).toISOString(),
@@ -148,6 +202,8 @@ export function startSession(input: Record<string, unknown>) {
         })
         .returning()
         .get();
+      if (prepared && metric) insertPowerHourReport(saved.id, prepared, metric.id);
+      return saved;
     })
     .immediate();
   events.emit('power-hour-change');
@@ -228,6 +284,8 @@ function registerParticipant(
     .transaction(() => {
       const session = activeSession();
       ensure(session?.id === sessionId, 'This Power Hour has ended.');
+      ensure(!session.report_mode, 'Report-driven Power Hours are view-only.');
+      ensure(!session.report_mode, 'Report-driven Power Hours are view-only.');
       admit(session);
       const member = participantForToken(existingToken, session.id);
       if (member) {
@@ -284,6 +342,7 @@ export function incrementScore(userId: number, sessionId: number, flagged = fals
     .transaction(() => {
       const session = activeSession();
       ensure(session?.id === sessionId, 'This Power Hour has ended.');
+      ensure(!session.report_mode, 'Report-driven Power Hours are view-only.');
       ensure(
         db
           .select({ id: power_hour_participants.id })

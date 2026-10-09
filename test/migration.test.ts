@@ -16,6 +16,8 @@ test('the baseline initializes a fresh database and is repeatable without changi
       '0000_initial_schema',
       '0001_admin_sessions',
       '0002_tracked_items',
+      '0003_power_hour_reports',
+      '0004_power_hour_plu_timestamps',
     ]);
     assert.deepEqual(db.prepare('SELECT id,enabled,password_hash FROM site_privacy').all(), [
       { id: 1, enabled: 0, password_hash: null },
@@ -27,7 +29,7 @@ test('the baseline initializes a fresh database and is repeatable without changi
     assert.deepEqual(db.pragma('foreign_key_check'), []);
     assert.equal(
       (db.prepare('SELECT count(*) AS n FROM rally_migrations').get() as { n: number }).n,
-      3,
+      5,
     );
     const columns = db.prepare('PRAGMA table_info(entries)').all() as {
       name: string;
@@ -67,7 +69,7 @@ test('migration history rejects changed checksums and unsupported versions', () 
     assert.throws(() => migrateDatabase(db), /unsupported migration history/);
     assert.equal(
       (db.prepare('SELECT count(*) AS n FROM rally_migrations').get() as { n: number }).n,
-      4,
+      6,
     );
   } finally {
     db.close();
@@ -106,7 +108,7 @@ test('the CLI initializes and seeds the current metric schema, then migrates wit
   };
   let db: Database.Database | undefined;
   try {
-    assert.match(run('scripts/migrate.mjs'), /Applied 3 migrations/);
+    assert.match(run('scripts/migrate.mjs'), /Applied 5 migrations/);
     assert.match(run('scripts/seed.ts'), /8 sample operator reports/);
     db = new Database(path);
     const before = db.prepare('SELECT * FROM report_values ORDER BY id').all();
@@ -141,7 +143,12 @@ test('an existing baseline database gains revocable admin sessions without repla
       new Date().toISOString(),
     );
     db.prepare("INSERT INTO users (name) VALUES ('Retained participant')").run();
-    assert.deepEqual(migrateDatabase(db), ['0001_admin_sessions', '0002_tracked_items']);
+    assert.deepEqual(migrateDatabase(db), [
+      '0001_admin_sessions',
+      '0002_tracked_items',
+      '0003_power_hour_reports',
+      '0004_power_hour_plu_timestamps',
+    ]);
     assert.deepEqual(db.prepare('SELECT name FROM users').all(), [
       { name: 'Retained participant' },
     ]);

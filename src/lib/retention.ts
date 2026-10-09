@@ -33,9 +33,10 @@ export async function cleanupRetainedData(options: Parameters<typeof cleanupDraf
             `
         SELECT proof_image_path FROM reports WHERE competition_id = ? AND proof_image_path IS NOT NULL
         UNION SELECT proof_image_path FROM entries WHERE competition_id = ? AND proof_image_path IS NOT NULL
+        UNION SELECT r.proof_image_path FROM power_hour_reports r JOIN power_hour_sessions s ON s.id = r.session_id WHERE s.competition_id = ? AND r.proof_image_path IS NOT NULL
       `,
           )
-          .all(competition.id, competition.id) as { proof_image_path: string }[];
+          .all(competition.id, competition.id, competition.id) as { proof_image_path: string }[];
         for (const proof of proofs) {
           // Use the durable image cleanup queue. Never retain extracted personal data in it.
           sqlite
@@ -53,6 +54,11 @@ export async function cleanupRetainedData(options: Parameters<typeof cleanupDraf
           .run(competition.id);
         sqlite
           .prepare('UPDATE entries SET proof_image_path = NULL WHERE competition_id = ?')
+          .run(competition.id);
+        sqlite
+          .prepare(
+            'UPDATE power_hour_reports SET proof_image_path = NULL WHERE session_id IN (SELECT id FROM power_hour_sessions WHERE competition_id = ?)',
+          )
           .run(competition.id);
         if (now < ended + RESULTS_RETENTION_DAYS * DAY) continue;
         sqlite
@@ -85,6 +91,12 @@ export async function cleanupRetainedData(options: Parameters<typeof cleanupDraf
           Math.max(ended, ends.get(session.competition_id!) ?? ended) +
           RESULTS_RETENTION_DAYS * DAY;
         if (!Number.isFinite(cutoff) || now < cutoff) continue;
+        sqlite
+          .prepare(
+            'DELETE FROM power_hour_report_values WHERE report_id IN (SELECT id FROM power_hour_reports WHERE session_id = ?)',
+          )
+          .run(session.id);
+        sqlite.prepare('DELETE FROM power_hour_reports WHERE session_id = ?').run(session.id);
         sqlite.prepare('DELETE FROM power_hour_scores WHERE session_id = ?').run(session.id);
         sqlite.prepare('DELETE FROM power_hour_participants WHERE session_id = ?').run(session.id);
         sqlite.prepare('DELETE FROM power_hour_sessions WHERE id = ?').run(session.id);

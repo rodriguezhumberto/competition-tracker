@@ -58,7 +58,7 @@ test('drafts require admin access and same-origin mutations, and discard invalid
       ).status(),
     ).toBe(403);
     await page.goto(`/admin?draft=${draft.token}`);
-    const upload = page.locator('.report-upload');
+    const upload = page.locator('.report-upload[data-report-workflow=competition]');
     await expect(upload.getByRole('heading', { name: 'Review extracted report' })).toBeVisible();
     await upload.getByRole('button', { name: 'Discard preview' }).click();
     await expect(upload.locator('.notice[role=status]')).toContainText('discarded');

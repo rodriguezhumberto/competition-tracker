@@ -57,11 +57,15 @@ const {
       <strong class="timer" x-text="ended ? 'Finished' : remaining"></strong>
     </div>
     {demo && (
-      <p class="power-hour-note" x-show="!joined && !ended">
+      <p class="power-hour-note" x-show="!joined && !ended && !session?.report_mode">
         The shared password is filled in for this demo. Enter your name to join.
       </p>
     )}
-    <form class="power-hour-join" x-on:submit.prevent="join()" x-show="!joined && !ended">
+    <form
+      class="power-hour-join"
+      x-on:submit.prevent="join()"
+      x-show="!joined && !ended && !session?.report_mode"
+    >
       <label x-show={demo ? 'true' : 'requiresPowerHourPassword'}>
         Shared password
         <input
@@ -92,15 +96,24 @@ const {
       </button>
       <p class="error" x-show="error" x-text="error" role="alert"></p>
     </form>
-    <p class="power-hour-note" x-show="ended && !joined">
+    <p class="power-hour-note" x-show="ended && !joined && !session?.report_mode">
       The Power Hour has ended. Participants can still view their final standings from the browser
       they joined with.
     </p>
-    <div class="live-grid" x-show="joined">
+    <div
+      class="live-grid"
+      x-show="joined || session?.report_mode"
+      x-bind:class="{ 'report-driven-grid': session?.report_mode }"
+    >
       <PowerHourLobbyLeaderboard />
-      <PowerHourControls />
+      <template x-if="!session?.report_mode">
+        <PowerHourControls />
+      </template>
     </div>
-    <p class="power-hour-note">
+    <p class="power-hour-note" x-show="session?.report_mode">
+      Scores track increases from the baseline.
+    </p>
+    <p class="power-hour-note" x-show="!session?.report_mode">
       A fresh start, just for fun. Power Hour scores are archived separately from the main
       leaderboard.
     </p>
@@ -120,3 +133,9 @@ const {
     )}
   </div>
 </div>
+
+<style>
+  .live-grid.report-driven-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+</style>

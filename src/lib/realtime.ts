@@ -77,8 +77,8 @@ export function attachRealtime(server: Server, overrides: Partial<RealtimeLimits
   };
   const broadcast = () => {
     const state = snapshot();
-    const requiresPowerHourPassword = !getSitePrivacy().enabled;
-    previousPasswordRequired = requiresPowerHourPassword;
+    const requiresPowerHourPassword = !state.session?.report_mode && !getSitePrivacy().enabled;
+    previousPasswordRequired = !getSitePrivacy().enabled;
     const currentId = state.session?.id || null;
     const event =
       currentId && currentId !== previousId
@@ -112,7 +112,9 @@ export function attachRealtime(server: Server, overrides: Partial<RealtimeLimits
         requiresPowerHourPassword,
         participant: member?.sessionId === currentId,
         scores:
-          isAdminCookieHeader(adminCookies.get(client)) || member?.sessionId === currentId
+          state.session?.report_mode ||
+          isAdminCookieHeader(adminCookies.get(client)) ||
+          member?.sessionId === currentId
             ? state.scores
             : [],
       });
@@ -171,9 +173,12 @@ export function attachRealtime(server: Server, overrides: Partial<RealtimeLimits
             ? 'power_hour_started'
             : 'state',
       ...initial,
-      requiresPowerHourPassword: !getSitePrivacy().enabled,
+      requiresPowerHourPassword: !initial.session?.report_mode && !getSitePrivacy().enabled,
       participant: !!member,
-      scores: isAdminCookieHeader(request.headers.cookie) || member ? initial.scores : [],
+      scores:
+        initial.session?.report_mode || isAdminCookieHeader(request.headers.cookie) || member
+          ? initial.scores
+          : [],
     });
     if (member) send(client, { event: 'joined', userId: member.userId, name: member.name });
     client.on('message', (raw) => {
@@ -195,6 +200,7 @@ export function attachRealtime(server: Server, overrides: Partial<RealtimeLimits
         ensure(message.action === 'increment', 'Unknown action.');
         const session = sessionState();
         ensure(session?.status === 'active', 'This Power Hour has ended.');
+        ensure(!session.report_mode, 'Report-driven Power Hours are view-only.');
         const participant = participantForToken(token, session.id);
         ensure(participant, 'Join this Power Hour from this browser first.');
         // sessionId prevents stale buffered taps from landing in a newly started Power Hour.

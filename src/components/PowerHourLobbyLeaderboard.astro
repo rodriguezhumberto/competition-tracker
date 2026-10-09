@@ -13,6 +13,9 @@
     ></span>
     <span x-text="'Scale: 0–' + scaleCeiling + ' ' + (session?.metric_label || 'points')"></span>
   </div>
+  <p class="empty-state" x-show="session?.report_mode && !scores.length">
+    No progress yet.
+  </p>
   <ol class="lobby-rank-list">
     <template x-for="(person,index) in scores" x-bind:key="person.userId">
       <li
@@ -33,7 +36,10 @@
           >
             ★
           </span>
-          <strong class="lobby-count" x-text="person.clicks"></strong>
+          <strong
+            class="lobby-count"
+            x-text="session?.report_mode ? formatScore(person.clicks) : person.clicks"
+          ></strong>
           <span class="sr-only" x-text="session?.metric_label"></span>
         </div>
         <div class="lobby-bar-track" aria-hidden="true">

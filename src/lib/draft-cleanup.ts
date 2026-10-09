@@ -2,7 +2,7 @@ import { unlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { and, asc, eq, ne, or, sql } from 'drizzle-orm';
 import { db } from '../db/index.ts';
-import { entries, reports, report_drafts } from '../db/schema.ts';
+import { entries, reports, report_drafts, power_hour_reports } from '../db/schema.ts';
 import { claimExpiredDrafts } from './draft-store.ts';
 import { reportImageArtifacts } from './report-image.ts';
 
@@ -30,6 +30,12 @@ export async function cleanupDrafts(
         throw new Error('Invalid proof filename in cleanup queue.');
       // Protect permanent proofs even for historical data that reused a filename.
       const retained =
+        db
+          .select({ id: power_hour_reports.id })
+          .from(power_hour_reports)
+          .where(eq(power_hour_reports.proof_image_path, draft.proof_image_path))
+          .limit(1)
+          .get() ||
         db
           .select({ id: reports.id })
           .from(reports)

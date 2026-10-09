@@ -312,7 +312,18 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
         expiresAt: number;
         revision: number;
       }[] = [],
+      options: { mode?: 'baseline' | 'power-hour'; sessionId?: number; name?: string } = {},
     ) => ({
+      uploadMode: options.mode || 'competition',
+      powerHourName: options.name || 'Power Hour',
+      powerHourDuration: 60,
+      powerHourMetric: '',
+      draftQuery:
+        options.mode === 'baseline'
+          ? 'power_hour_baseline_draft'
+          : options.mode === 'power-hour'
+            ? 'power_hour_draft'
+            : 'draft',
       ...reportImagePreview(),
       busy: false,
       error: '',
@@ -344,7 +355,7 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
       reviewed: false,
       modeDescriptions,
       async init() {
-        const token = new URLSearchParams(location.search).get('draft');
+        const token = new URLSearchParams(location.search).get(this.draftQuery);
         if (token) await this.reopen(token);
       },
       loadDraft(result: {
@@ -367,6 +378,17 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
         this.report = result.report;
         this.originalReport = result.originalReport;
         this.metrics = result.metrics;
+        if (
+          !this.metrics.some(
+            (metric) =>
+              String(metric.id) === this.powerHourMetric &&
+              metric.public &&
+              metric.mode !== 'additive',
+          )
+        )
+          this.powerHourMetric = String(
+            this.metrics.find((metric) => metric.public && metric.mode !== 'additive')?.id || '',
+          );
         this.timezone = result.timezone;
         this.identifierLabel = result.identifierLabel;
         this.schemaChanged = result.schemaChanged;
@@ -378,7 +400,7 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
         this.addingItem = false;
         this.reviewed = false;
         const url = new URL(location.href);
-        url.searchParams.set('draft', result.token);
+        url.searchParams.set(this.draftQuery, result.token);
         history.replaceState(null, '', url);
       },
       async addTrackedItem() {
@@ -449,7 +471,7 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
       },
       clearDraftUrl() {
         const url = new URL(location.href);
-        url.searchParams.delete('draft');
+        url.searchParams.delete(this.draftQuery);
         history.replaceState(null, '', url);
       },
       async closeDraft() {
@@ -533,18 +555,47 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
         this.error = '';
         this.message = '';
         try {
-          const result = await post('/api/reports', {
-            token: this.token,
-            revision: this.revision,
-            report: this.report,
-            confirmed: this.reviewed,
-          });
+          const result = await post(
+            options.mode === 'baseline'
+              ? '/api/power-hour/start'
+              : options.mode === 'power-hour'
+                ? '/api/power-hour/reports'
+                : '/api/reports',
+            {
+              token: this.token,
+              revision: this.revision,
+              report: this.report,
+              confirmed: this.reviewed,
+              ...(options.mode === 'power-hour' ? { session_id: options.sessionId } : {}),
+              ...(options.mode === 'baseline'
+                ? {
+                    report_mode: true,
+                    name: this.powerHourName,
+                    duration_minutes: this.powerHourDuration,
+                    report_metric_id: this.powerHourMetric,
+                    baseline_token: this.token,
+                    baseline_revision: this.revision,
+                    baseline_report: this.report,
+                  }
+                : {}),
+            },
+          );
           this.message = result.message;
           this.report = null;
           this.originalReport = null;
           this.token = '';
           this.clearDraftUrl();
           this.reviewed = false;
+          if (options.mode) {
+            const destination =
+              '/admin?success=1' +
+              (options.mode === 'power-hour' ? '&power_hour_session=' + options.sessionId : '') +
+              '#power-hour';
+            if (location.pathname + location.search + location.hash === destination)
+              location.reload();
+            else location.assign(destination);
+            return;
+          }
           await this.refreshDrafts();
         } catch (e) {
           this.error = errorText(e);

@@ -108,7 +108,7 @@ test('unrecognized report codes require review and adding an item preserves edit
     { code: '0009999', name: 'Other product' },
   ]);
   await page.goto('/admin');
-  const upload = page.locator('.report-upload');
+  const upload = page.locator('.report-upload[data-report-workflow=competition]');
   const image = await sharp({ create: { width: 120, height: 80, channels: 3, background: '#fff' } })
     .png()
     .toBuffer();

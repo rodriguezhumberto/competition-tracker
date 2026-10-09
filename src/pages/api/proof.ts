@@ -5,7 +5,13 @@ import { resolve } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { isAdmin } from '../../lib/auth.ts';
 import { db } from '../../db/index.ts';
-import { competitions, entries, report_drafts } from '../../db/schema.ts';
+import {
+  competitions,
+  entries,
+  report_drafts,
+  power_hour_reports,
+  power_hour_sessions,
+} from '../../db/schema.ts';
 import {
   competitionEndsAt,
   PROOF_RETENTION_DAYS,
@@ -29,6 +35,18 @@ export const GET: APIRoute = async ({ url, cookies }) => {
     if (!draft || draft.status !== 'reviewable' || draft.expires_at <= now)
       return new Response('Not found', { status: 404 });
     filename = draft.proof_image_path;
+    competition = result?.competitions;
+  } else if (url.searchParams.has('power_hour_report')) {
+    const id = Number(url.searchParams.get('power_hour_report'));
+    if (!Number.isSafeInteger(id)) return new Response('Not found', { status: 404 });
+    const result = db
+      .select()
+      .from(power_hour_reports)
+      .innerJoin(power_hour_sessions, eq(power_hour_reports.session_id, power_hour_sessions.id))
+      .innerJoin(competitions, eq(power_hour_sessions.competition_id, competitions.id))
+      .where(eq(power_hour_reports.id, id))
+      .get();
+    filename = result?.power_hour_reports.proof_image_path;
     competition = result?.competitions;
   } else {
     const id = Number(url.searchParams.get('id'));

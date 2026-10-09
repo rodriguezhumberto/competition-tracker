@@ -24,7 +24,7 @@ async function prepare(page: import('@playwright/test').Page) {
   );
   await authenticateAdmin(page);
   await page.goto('/admin');
-  const upload = page.locator('.report-upload');
+  const upload = page.locator('.report-upload[data-report-workflow=competition]');
   if ((await upload.locator('select option').count()) === 1) {
     const today = centralDate();
     const response = await page.request.post('/api/competition', {

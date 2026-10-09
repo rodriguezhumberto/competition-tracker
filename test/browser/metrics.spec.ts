@@ -106,7 +106,7 @@ test('schema discovery, edited preview, privacy, alternate sorting and acknowled
     await expect(publicPage.locator('.compact-rankings .empty-state')).toBeVisible();
     expect(await publicPage.content()).not.toContain('Dollars Sold');
     await page.goto('/admin');
-    const upload = page.locator('.report-upload');
+    const upload = page.locator('.report-upload[data-report-workflow=competition]');
     await upload
       .locator('input[type=file]')
       .setInputFiles({ name: 'report.png', mimeType: 'image/png', buffer: image });
