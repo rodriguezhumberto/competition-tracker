@@ -85,7 +85,7 @@ export const power_hour_sessions = sqliteTable(
     competition_id: integer('competition_id').references(() => competitions.id),
     name: text('name').notNull(),
     metric_label: text('metric_label').notNull().default('points'),
-    status: text('status', { enum: ['active', 'archived'] })
+    status: text('status', { enum: ['active', 'processing', 'archived'] })
       .notNull()
       .default('active'),
     created_at: text('created_at')
@@ -93,6 +93,7 @@ export const power_hour_sessions = sqliteTable(
       .$defaultFn(() => new Date().toISOString()),
     ends_at: text('ends_at').notNull(),
     password_hash: text('password_hash'),
+    finalized_at: text('finalized_at'),
     report_mode: integer('report_mode', { mode: 'boolean' }).notNull().default(false),
     report_metric_id: integer('report_metric_id').references(() => competition_metrics.id),
     report_metric_precision: integer('report_metric_precision').notNull().default(0),

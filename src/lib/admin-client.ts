@@ -8,7 +8,8 @@ import {
   type Metric,
   type ReportProfile,
 } from './metrics.ts';
-import { zonedClock } from './report-time.ts';
+import { zonedClock, resolveReportTime } from './report-time.ts';
+import { powerHourTimingWarning } from './power-hour-time.ts';
 import { centralReportTime } from './central-time.ts';
 import type { ReportInput } from './competition-store.ts';
 import { validateItems, type TrackedItem } from './tracked-items.ts';
@@ -312,9 +313,31 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
         expiresAt: number;
         revision: number;
       }[] = [],
-      options: { mode?: 'baseline' | 'power-hour'; sessionId?: number; name?: string } = {},
+      options: {
+        mode?: 'baseline' | 'power-hour';
+        sessionId?: number;
+        name?: string;
+        endsAt?: string;
+      } = {},
     ) => ({
       uploadMode: options.mode || 'competition',
+      powerHourEndsAt: options.endsAt || '',
+      updatePowerHourSession(session: { id: number; ends_at: string } | null) {
+        if (session && session.id === options.sessionId) this.powerHourEndsAt = session.ends_at;
+      },
+      get reportTimingWarning(): string {
+        if (!this.powerHourEndsAt || !this.report?.generated_at) return '';
+        try {
+          return (
+            powerHourTimingWarning(
+              resolveReportTime(this.report.generated_at, this.timezone),
+              this.powerHourEndsAt,
+            ) || ''
+          );
+        } catch {
+          return '';
+        }
+      },
       powerHourName: options.name || 'Power Hour',
       powerHourDuration: 60,
       powerHourMetric: '',
@@ -590,6 +613,7 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
             const destination =
               '/admin?success=1' +
               (options.mode === 'power-hour' ? '&power_hour_session=' + options.sessionId : '') +
+              (result.warning ? '&warning=' + encodeURIComponent(result.warning) : '') +
               '#power-hour';
             if (location.pathname + location.search + location.hash === destination)
               location.reload();

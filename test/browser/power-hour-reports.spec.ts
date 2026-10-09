@@ -99,9 +99,29 @@ test('reviewed PLU reports start a view-only Power Hour and aggregate independen
       .toBeGreaterThanOrEqual(69);
     const ordinary = page.locator('[data-report-workflow="competition"]');
     await expect(ordinary.getByRole('heading', { name: 'Review extracted report' })).toHaveCount(0);
-    await page.getByRole('button', { name: 'End & archive', exact: true }).click();
+    const ended = await page.request.post('/api/admin', {
+      headers: { Origin: origin },
+      form: { action: 'archive' },
+    });
+    expect(ended.ok()).toBe(true);
+    await expect(lobby.locator('.timer')).toHaveText('Processing');
+    await expect(lobby.locator('.takeover-bar')).toContainText('PROCESSING RESULTS');
+    await expect(
+      page.getByRole('heading', { name: 'Report race · Awaiting final reports' }),
+    ).toBeVisible();
+    const final = await scan('power-hour', '0004011', -6, '14');
+    await expect(final.getByRole('alert')).toContainText('more than 5 minutes after the cutoff');
+    await expect(final.getByRole('button', { name: 'Confirm update', exact: true })).toBeEnabled();
+    await final.getByLabel('Report generation time').fill(new Date().toISOString());
+    await expect(
+      final.getByRole('alert').filter({ hasText: 'more than 5 minutes' }),
+    ).not.toBeVisible();
+    await final.getByRole('button', { name: 'Confirm update', exact: true }).click();
+    await expect(lobby.locator('.lobby-count')).toHaveText('7.00');
+    await page.getByRole('button', { name: 'Publish final results', exact: true }).click();
     await expect(lobby.locator('.timer')).toHaveText('Finished');
-    await expect(lobby.locator('.lobby-count')).toHaveText('5.00');
+    await expect(lobby.locator('.lobby-count')).toHaveText('7.00');
+    await expect(page.locator('[data-report-workflow="power-hour"]')).toHaveCount(0);
     await expect(lobby.locator('.tap-button')).toHaveCount(0);
   } finally {
     await viewer.close();

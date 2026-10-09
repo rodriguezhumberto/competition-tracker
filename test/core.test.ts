@@ -395,6 +395,7 @@ test('ending early starts the results window immediately and a new Power Hour re
   const final = store.snapshot().session!;
   assert.equal(final.status, 'ended');
   assert(Date.parse(final.ends_at) >= before && Date.parse(final.ends_at) <= Date.now());
+  assert.ok(final.results_until);
   assert.equal(Date.parse(final.results_until) - Date.parse(final.ends_at), 120000);
   const next = store.startSession({ name: 'Next Power Hour', password: sharedPassword });
   assert.equal(store.snapshot().session?.id, next.id);

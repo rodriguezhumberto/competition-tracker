@@ -36,7 +36,7 @@ const {
   <div class="takeover-bar" x-show="session" x-cloak>
     <span>
       <span class="status-dot"></span>{' '}
-      <span x-text="ended ? 'POWER HOUR • FINAL RESULTS' : escaped ? 'POWER HOUR IS LIVE' : connected ? 'POWER HOUR LOBBY • CONNECTED' : 'POWER HOUR LOBBY • RECONNECTING'"></span>
+      <span x-text="session?.status === 'processing' ? 'POWER HOUR • PROCESSING RESULTS' : ended ? 'POWER HOUR • FINAL RESULTS' : escaped ? 'POWER HOUR IS LIVE' : connected ? 'POWER HOUR LOBBY • CONNECTED' : 'POWER HOUR LOBBY • RECONNECTING'"></span>
     </span>
     <button class="text-button" x-on:click="escaped = !escaped">
       <span x-text="escaped ? 'Back to Power Hour' : 'View main leaderboard'"></span> <Icon />
@@ -46,7 +46,7 @@ const {
     <div class="power-hour-live-head">
       <div>
         <h2 x-text="session?.name"></h2>
-        <p x-show="!ended">
+        <p x-show="!ended && session?.status !== 'processing'">
           Tracking <span x-text="session?.metric_label"></span>
         </p>
         <p x-show="ended" role="status">
@@ -54,7 +54,10 @@ const {
           leaderboard.
         </p>
       </div>
-      <strong class="timer" x-text="ended ? 'Finished' : remaining"></strong>
+      <strong
+        class="timer"
+        x-text="session?.status === 'processing' ? 'Processing' : ended ? 'Finished' : remaining"
+      ></strong>
     </div>
     {demo && (
       <p class="power-hour-note" x-show="!joined && !ended && !session?.report_mode">

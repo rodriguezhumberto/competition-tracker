@@ -1,0 +1,1 @@
+ALTER TABLE `power_hour_sessions` ADD `finalized_at` text;

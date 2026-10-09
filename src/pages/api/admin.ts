@@ -5,6 +5,7 @@ import {
   startSession,
   extendSession,
   archiveSession,
+  publishReportResults,
 } from '../../lib/store.ts';
 import { limitedFormData } from '../../lib/http.ts';
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
@@ -25,6 +26,9 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         break;
       case 'extend':
         extendSession(input);
+        break;
+      case 'publish_results':
+        publishReportResults(Number(input.session_id));
         break;
       case 'archive':
         archiveSession();

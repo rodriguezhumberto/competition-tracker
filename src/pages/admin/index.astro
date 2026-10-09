@@ -8,7 +8,7 @@ import CompetitionList from '../../components/admin/CompetitionList.astro';
 import RecentReports from '../../components/admin/RecentReports.astro';
 import SitePrivacy from '../../components/admin/SitePrivacy.astro';
 import { isAdmin } from '../../lib/auth.ts';
-import { activeSession, sessionScores } from '../../lib/store.ts';
+import { openSession, sessionScores } from '../../lib/store.ts';
 import { getCompetitionConfigurations, recentMetricReports } from '../../lib/competition-store.ts';
 import { centralDate } from '../../lib/central-time.ts';
 
@@ -16,7 +16,7 @@ if (!isAdmin(Astro.cookies)) return Astro.redirect('/admin/login');
 
 const competitions = getCompetitionConfigurations();
 const recent = recentMetricReports();
-const session = activeSession();
+const session = openSession();
 const current = competitions.find((c) => c.is_active);
 const today = centralDate();
 ---
@@ -30,6 +30,11 @@ const today = centralDate();
   {Astro.url.searchParams.has('success') && (
     <p class="notice" role="status">
       Saved. Your team is up to date.
+    </p>
+  )}
+  {Astro.url.searchParams.get('warning') && (
+    <p class="notice" role="alert">
+      {Astro.url.searchParams.get('warning')}
     </p>
   )}
   <PowerHourAdmin session={session} scores={session ? sessionScores(session.id) : []} />

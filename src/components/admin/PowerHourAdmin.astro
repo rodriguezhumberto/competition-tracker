@@ -34,11 +34,24 @@ const scheduledEnd = session
 <section
   class="power-hour-admin"
   id="power-hour"
-  x-data="{ reportMode: new URLSearchParams(location.search).has('power_hour_baseline_draft') }"
+  x-data={`{ reportMode: new URLSearchParams(location.search).has('power_hour_baseline_draft'), sessionStatus: ${JSON.stringify(session?.status || '')} }`}
+  x-on:power-hour-session.window={`if ($event.detail?.id === ${session?.id || 0}) sessionStatus = $event.detail.status`}
   x-bind:class="{ 'report-configuration': reportMode }"
 >
   <div>
-    <h2>{session ? session.name + ' is live.' : 'Start a Power Hour'}</h2>
+    <h2
+      x-text={
+        session
+          ? `${JSON.stringify(session.name)} + (sessionStatus === 'processing' ? ' · Awaiting final reports' : ' is live.')`
+          : undefined
+      }
+    >
+      {session
+        ? session.status === 'processing'
+          ? session.name + ' · Awaiting final reports'
+          : session.name + ' is live.'
+        : 'Start a Power Hour'}
+    </h2>
     {session && (
       <p>
         {session.metric_label || 'points'} · Ends {scheduledEnd}
@@ -47,7 +60,7 @@ const scheduledEnd = session
   </div>
   {session ? (
     <div>
-      <form action="/api/admin" method="POST">
+      <form action="/api/admin" method="POST" x-show="sessionStatus === 'active'">
         <input type="hidden" name="action" value="extend" />
         <label for="extend-minutes">
           Add minutes
@@ -69,15 +82,22 @@ const scheduledEnd = session
           </span>
         </button>
       </form>
-      <form action="/api/admin" method="POST">
+      <form action="/api/admin" method="POST" x-show="sessionStatus === 'active'">
         <input type="hidden" name="action" value="archive" />
         <button class="button button-accent">
-          End & archive{' '}
+          {session.report_mode ? 'End Power Hour' : 'End & archive'}{' '}
           <span>
             <Icon />
           </span>
         </button>
       </form>
+      {session.report_mode && (
+        <form action="/api/admin" method="POST" x-show="sessionStatus === 'processing'" x-cloak>
+          <input type="hidden" name="action" value="publish_results" />
+          <input type="hidden" name="session_id" value={session.id} />
+          <button class="button button-accent">Publish final results</button>
+        </form>
+      )}
     </div>
   ) : (
     <div>
@@ -159,7 +179,7 @@ const scheduledEnd = session
 {reportSession && (
   <section class="panel" aria-label="Power Hour reports">
     <h2>
-      {reportSession.name} · {reportSession.status === 'active' ? 'Reports' : 'Archived'}
+      {reportSession.name} · {reportSession.status === 'archived' ? 'Archived' : 'Reports'}
     </h2>
     <p>
       Window: {new Date(reportSession.created_at).toLocaleString()} to{' '}
@@ -195,11 +215,14 @@ const scheduledEnd = session
         </li>
       ))}
     </ol>
-    <ReportUploadForm
-      competitions={reportCompetitions.filter((item) => item.id === reportSession.competition_id)}
-      mode="power-hour"
-      sessionId={reportSession.id}
-    />
+    {!reportSession.finalized_at && (
+      <ReportUploadForm
+        competitions={reportCompetitions.filter((item) => item.id === reportSession.competition_id)}
+        mode="power-hour"
+        sessionId={reportSession.id}
+        endsAt={reportSession.ends_at}
+      />
+    )}
     {reportSession.status === 'archived' && (
       <PowerHourLiveLeaderboard
         sessionId={reportSession.id}

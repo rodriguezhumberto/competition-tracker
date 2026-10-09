@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 1.1.1 — 2026-10-09
+
+### Fixed
+
+- Report-driven Power Hours stay open for final uploads after the countdown ends. Participants see provisional standings until the admin publishes final results.
+- Reports printed more than five minutes after the cutoff show a warning and can still be accepted. Published results are locked.
+
+## 1.1.0 — 2026-10-09
 
 ### Added
 

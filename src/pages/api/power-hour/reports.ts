@@ -12,6 +12,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     return Response.json({
       message: saved.is_baseline ? 'Item baseline saved.' : 'Power Hour report saved.',
       is_baseline: saved.is_baseline,
+      warning: saved.warning,
       timestamp: saved.timestamp,
     });
   } catch (error) {

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, lte, or, sql } from 'drizzle-orm';
 import { db, sqlite } from '../db/index.ts';
 import {
   users,
@@ -34,7 +34,9 @@ export {
 export function expireSessions() {
   return db
     .update(power_hour_sessions)
-    .set({ status: 'archived' })
+    .set({
+      status: sql`case when ${power_hour_sessions.report_mode} = 1 then 'processing' else 'archived' end`,
+    })
     .where(
       and(
         eq(power_hour_sessions.status, 'active'),
@@ -49,6 +51,18 @@ export function activeSession() {
   return (
     db.select().from(power_hour_sessions).where(eq(power_hour_sessions.status, 'active')).get() ||
     null
+  );
+}
+export function openSession() {
+  expireSessions();
+  return (
+    db
+      .select()
+      .from(power_hour_sessions)
+      .where(
+        or(eq(power_hour_sessions.status, 'active'), eq(power_hour_sessions.status, 'processing')),
+      )
+      .get() || null
   );
 }
 export function sessionScores(sessionId: number) {
@@ -76,10 +90,10 @@ export function sessionScores(sessionId: number) {
     .all();
 }
 const RESULTS_WINDOW_MS = 2 * 60000;
-// Ended sessions remain readable in the lobby, while writes still require activeSession().
+// Report sessions stay visible until the admin publishes their final results.
 function lobbySession() {
-  const active = activeSession();
-  if (active) return active;
+  const open = openSession();
+  if (open) return open;
   const latest = db
     .select()
     .from(power_hour_sessions)
@@ -87,7 +101,7 @@ function lobbySession() {
     .orderBy(desc(power_hour_sessions.id))
     .get();
   if (!latest) return null;
-  const endedAt = Date.parse(latest.ends_at);
+  const endedAt = Date.parse(latest.finalized_at || latest.ends_at);
   const now = Date.now();
   return endedAt <= now && now < endedAt + RESULTS_WINDOW_MS ? latest : null;
 }
@@ -112,8 +126,11 @@ function publicSession(session: NonNullable<ReturnType<typeof lobbySession>>) {
         : null,
     created_at: session.created_at,
     ends_at: endsAt,
-    status: session.status === 'active' ? 'active' : 'ended',
-    results_until: new Date(Date.parse(endsAt) + RESULTS_WINDOW_MS).toISOString(),
+    status: session.status === 'archived' ? 'ended' : session.status,
+    results_until:
+      session.status === 'processing'
+        ? null
+        : new Date(Date.parse(session.finalized_at || endsAt) + RESULTS_WINDOW_MS).toISOString(),
   };
 }
 // Session reconciliation does not need scores. Realtime uses this for its expiry timer.
@@ -167,7 +184,7 @@ export function startSession(input: Record<string, unknown>) {
   const minutes = durationMinutes(input.duration_minutes ?? 60);
   const session = sqlite
     .transaction(() => {
-      ensure(!activeSession(), 'A Power Hour is already running.');
+      ensure(!openSession(), 'A Power Hour is already running or awaiting final reports.');
       const prepared = reportMode ? preparePowerHourReport(input, true) : null;
       const metric = prepared?.competition.metrics.find(
         (m) => m.id === Number(input.report_metric_id),
@@ -330,12 +347,31 @@ function registerParticipant(
 export function archiveSession() {
   db.update(power_hour_sessions)
     .set({
-      status: 'archived',
+      status: sql`case when ${power_hour_sessions.report_mode} = 1 then 'processing' else 'archived' end`,
       ends_at: sql`min(${power_hour_sessions.ends_at}, ${new Date().toISOString()})`,
     })
     .where(eq(power_hour_sessions.status, 'active'))
     .run();
   events.emit('power-hour-change');
+}
+export function publishReportResults(sessionId: number) {
+  const session = sqlite
+    .transaction(() => {
+      const current = openSession();
+      ensure(
+        current?.id === sessionId && current.report_mode && current.status === 'processing',
+        'This Power Hour is not awaiting final reports.',
+      );
+      return db
+        .update(power_hour_sessions)
+        .set({ status: 'archived', finalized_at: new Date().toISOString() })
+        .where(eq(power_hour_sessions.id, current.id))
+        .returning()
+        .get();
+    })
+    .immediate();
+  events.emit('power-hour-change');
+  return session;
 }
 export function incrementScore(userId: number, sessionId: number, flagged = false) {
   sqlite

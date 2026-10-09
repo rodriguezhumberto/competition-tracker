@@ -1,13 +1,17 @@
 <section class="live-ranks" aria-label="Live Power Hour standings">
   <div class="lobby-board-heading">
     <div>
-      <span class="eyebrow" x-text="ended ? 'THE RESULTS ARE IN' : 'THE RACE IS ON'"></span>
-      <h3 x-text="ended ? 'Final standings' : 'Live standings'"></h3>
+      <span
+        class="eyebrow"
+        x-text="session?.status === 'processing' ? 'AWAITING FINAL REPORTS' : ended ? 'THE RESULTS ARE IN' : 'THE RACE IS ON'"
+      ></span>
+      <h3 x-text="session?.status === 'processing' ? 'Provisional standings' : ended ? 'Final standings' : 'Live standings'"></h3>
     </div>
     <span class="pill" x-text="scores.length + ' participants'"></span>
   </div>
   <div class="lobby-board-meta">
     <span
+      x-show="session?.status !== 'processing'"
       x-text="ended ? 'Final results' : connected ? 'Live updates' : 'Reconnecting · showing last counts'"
       role="status"
     ></span>

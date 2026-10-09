@@ -8,16 +8,18 @@ interface Props {
   mode?: 'baseline' | 'power-hour';
   sessionId?: number;
   suggestedName?: string;
+  endsAt?: string;
 }
-const { competitions, mode, sessionId, suggestedName } = Astro.props;
+const { competitions, mode, sessionId, suggestedName, endsAt } = Astro.props;
 const drafts = listPendingDrafts();
 ---
 
 <section
   data-competition-admin
   data-report-workflow={mode || 'competition'}
+  x-on:power-hour-session.window="updatePowerHourSession($event.detail)"
   class="panel report-upload"
-  x-data={`reportUpload(${JSON.stringify(drafts)}, ${JSON.stringify({ mode, sessionId, name: suggestedName })})`}
+  x-data={`reportUpload(${JSON.stringify(drafts)}, ${JSON.stringify({ mode, sessionId, name: suggestedName, endsAt })})`}
 >
   <h2>
     {mode === 'baseline'
@@ -93,6 +95,14 @@ const drafts = listPendingDrafts();
   <template x-if="report">
     <form class="report-preview" x-on:submit.prevent="confirm()">
       <h3>Review extracted report</h3>
+      {mode === 'power-hour' && (
+        <p
+          class="notice"
+          role="alert"
+          x-show="reportTimingWarning"
+          x-text="reportTimingWarning"
+        ></p>
+      )}
       {mode === 'baseline' && (
         <fieldset>
           <legend>Power Hour configuration</legend>
@@ -127,11 +137,11 @@ const drafts = listPendingDrafts();
             Each item’s first report sets its baseline. Later reports need a newer timestamp for
             that item.
           </p>
+          <p>Use that item’s baseline period. Totals cannot decrease.</p>
           <p>
-            Use that item’s baseline period. Totals cannot decrease. Reports must fall within the
-            Power Hour.
+            Final reports can be printed after the cutoff. More than 5 minutes late triggers a
+            warning.
           </p>
-          <p>Reports from within the window can be confirmed after it ends.</p>
         </details>
       )}
       <p>

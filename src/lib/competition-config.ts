@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt } from 'drizzle-orm';
+import { and, asc, desc, eq, or } from 'drizzle-orm';
 import { db, sqlite } from '../db/index.ts';
 import {
   competitions,
@@ -99,8 +99,10 @@ export function updateCompetition(input: Record<string, unknown>) {
             and(
               eq(power_hour_sessions.competition_id, c.id),
               eq(power_hour_sessions.report_mode, true),
-              eq(power_hour_sessions.status, 'active'),
-              gt(power_hour_sessions.ends_at, new Date().toISOString()),
+              or(
+                eq(power_hour_sessions.status, 'active'),
+                eq(power_hour_sessions.status, 'processing'),
+              ),
             ),
           )
           .get(),

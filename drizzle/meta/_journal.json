@@ -36,6 +36,13 @@
       "when": 1791523421992,
       "tag": "0004_power_hour_plu_timestamps",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1791581952341,
+      "tag": "0005_power_hour_final_results",
+      "breakpoints": true
     }
   ]
 }

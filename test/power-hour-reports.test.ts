@@ -80,7 +80,7 @@ function update(sessionId: number, offset: number, rows?: [string, string][]) {
     report: raw,
   });
 }
-beforeEach(() => store.archiveSession());
+beforeEach(() => sqlite.prepare("UPDATE power_hour_sessions SET status = 'archived'").run());
 after(() => {
   sqlite.close();
   rmSync(directory, { recursive: true, force: true });
@@ -144,17 +144,14 @@ test('timestamps serialize, stale drafts and counter resets cannot alter accepte
   assert.equal(powerHourReportHistory(session.id).length, 2);
 });
 
-test('extensions move the report cutoff repeatedly and ended sessions accept in-window final reports', (t) => {
+test('extensions move the report cutoff repeatedly and late reports within the grace period are accepted', (t) => {
   const session = startReportSession();
   t.mock.method(Date, 'now', () => start + 30 * 60000);
   store.extendSession({ duration_minutes: 15 });
   store.extendSession({ duration_minutes: 15 });
   assert.equal(store.activeSession()?.ends_at, new Date(start + 90 * 60000).toISOString());
   t.mock.method(Date, 'now', () => start + 100 * 60000);
-  assert.throws(() => update(session.id, 91, [['001', '105.00']]), /after the Power Hour end/);
-  // Archiving closes scoring at the current end; confirmation can still finish afterwards.
-  sqlite.prepare("UPDATE power_hour_sessions SET status = 'archived' WHERE id = ?").run(session.id);
-  update(session.id, 90, [['001', '105.00']]);
+  assert.equal(update(session.id, 91, [['001', '105.00']]).warning, null);
   assert.equal(store.sessionScores(session.id)[0].clicks, 5);
 });
 
@@ -228,6 +225,7 @@ test('live report configurations and saved metric units cannot change beneath th
   };
   assert.throws(() => updateCompetition(input), /live Power Hour/);
   store.archiveSession();
+  store.publishReportResults(store.openSession()!.id);
   assert.throws(
     () =>
       updateCompetition({
@@ -333,12 +331,44 @@ test('PLU duplicate/older reports, missing operator baselines and decreases are 
   assert.equal(powerHourReportHistory(session.id).length, 4);
 });
 
-test('additional PLU baselines and updates stay inside the session window', (t) => {
+test('additional PLU reports cannot precede the start and warn after the five-minute grace period', (t) => {
   const { session, upload } = pluSession();
   assert.throws(() => upload('00200', -1, [['001', '50.00']]), /before the Power Hour start/);
   t.mock.method(Date, 'now', () => start + 100 * 60000);
-  assert.throws(() => upload('00200', 61, [['001', '50.00']]), /after the Power Hour end/);
-  upload('00200', 2, [['001', '50.00']]);
-  assert.throws(() => upload('00200', 61, [['001', '55.00']]), /after the Power Hour end/);
-  assert.equal(powerHourReportHistory(session.id).length, 2);
+  assert.equal(upload('00200', 2, [['001', '50.00']]).is_baseline, true);
+  assert.equal(upload('00200', 61, [['001', '55.00']]).warning, null);
+  assert.match(upload('00200', 66, [['001', '56.00']]).warning!, /more than 5 minutes/);
+  assert.equal(powerHourReportHistory(session.id).length, 4);
+});
+
+test('report mode waits indefinitely for final reports, then publishes and freezes results', (t) => {
+  const session = startReportSession();
+  t.mock.timers.enable({ apis: ['Date'], now: start + 61 * 60000 });
+  assert.equal(store.activeSession(), null);
+  assert.equal(store.openSession()?.status, 'processing');
+  assert.equal(store.publicSnapshot().session?.status, 'processing');
+  assert.equal(store.publicSnapshot().session?.results_until, null);
+  assert.throws(() => startReportSession(), /awaiting final reports/);
+  assert.equal(update(session.id, 61, [['001', '105.00']]).warning, null);
+  t.mock.timers.setTime(start + 90 * 60000);
+  assert.equal(store.publicSnapshot().session?.id, session.id);
+  assert.match(update(session.id, 66, [['001', '108.00']]).warning!, /more than 5 minutes/);
+  assert.equal(store.sessionScores(session.id)[0].clicks, 8);
+  assert.throws(() => store.publishReportResults(session.id + 1), /not awaiting/);
+  store.publishReportResults(session.id);
+  const results = store.publicSnapshot().session!;
+  assert.equal(results.status, 'ended');
+  assert.equal(Date.parse(results.results_until!), Date.now() + 120000);
+  assert.throws(() => update(session.id, 67, [['001', '109.00']]), /already been published/);
+  t.mock.timers.setTime(start + 93 * 60000);
+  assert.equal(store.publicSnapshot().session, null);
+});
+
+test('the five-minute final-report boundary uses the printed timestamp rather than upload time', (t) => {
+  const session = startReportSession();
+  t.mock.timers.enable({ apis: ['Date'], now: start + 120 * 60000 });
+  assert.equal(update(session.id, 60, [['001', '101.00']]).warning, null);
+  assert.equal(update(session.id, 65, [['001', '102.00']]).warning, null);
+  assert.match(update(session.id, 65.01, [['001', '103.00']]).warning!, /more than 5 minutes/);
+  assert.equal(store.sessionScores(session.id)[0].clicks, 3);
 });

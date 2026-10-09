@@ -14,8 +14,8 @@ interface Session {
   metric_label: string;
   created_at: string;
   ends_at: string;
-  status: 'active' | 'ended';
-  results_until: string;
+  status: 'active' | 'processing' | 'ended';
+  results_until: string | null;
   report_mode?: boolean;
   report_metric?: PowerHourMetricFormat | null;
 }
@@ -249,6 +249,8 @@ Alpine.data(
       ws.onmessage = (message) => {
         if (this.socket !== ws) return;
         const data = JSON.parse(message.data);
+        if (data.session?.id === initial.sessionId)
+          window.dispatchEvent(new CustomEvent('power-hour-session', { detail: data.session }));
         if ('session' in data && (!initial.archived || data.session?.id === initial.sessionId))
           this.scores = data.session?.id === initial.sessionId ? data.scores : [];
       };

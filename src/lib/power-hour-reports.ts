@@ -11,6 +11,7 @@ import { reviewableDraft, checkDraftRevision } from './draft-store.ts';
 import { validateReport } from './report-validation.ts';
 import { ensure } from './validation.ts';
 import { events } from './events.ts';
+import { powerHourTimingWarning } from './power-hour-time.ts';
 
 export function preparePowerHourReport(input: Record<string, unknown>, baseline = false) {
   ensure(
@@ -123,6 +124,7 @@ export function savePowerHourReport(input: Record<string, unknown>) {
         session?.report_mode && session.report_metric_id,
         'Choose a report-driven Power Hour.',
       );
+      ensure(!session.finalized_at, 'Final results have already been published.');
       const prepared = preparePowerHourReport(input);
       ensure(
         prepared.competition.id === session.competition_id,
@@ -146,10 +148,6 @@ export function savePowerHourReport(input: Record<string, unknown>) {
       ensure(
         !previous || report.timestamp > previous.timestamp,
         'Report timestamp must be newer than the previous accepted report for this item.',
-      );
-      ensure(
-        report.timestamp <= session.ends_at,
-        'Report timestamp falls after the Power Hour end. Add time before uploading this report.',
       );
       ensure(
         !baseline || (report.start === baseline.period_start && report.end === baseline.period_end),
@@ -186,6 +184,7 @@ export function savePowerHourReport(input: Record<string, unknown>) {
       return {
         ...insertPowerHourReport(session.id, prepared, session.report_metric_id),
         is_baseline: !previous,
+        warning: powerHourTimingWarning(report.timestamp, session.ends_at),
       };
     })
     .immediate();
