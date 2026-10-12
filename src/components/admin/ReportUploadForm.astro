@@ -3,6 +3,7 @@ import type { getCompetitions } from '../../lib/store.ts';
 import ReportImagePreview from './ReportImagePreview.astro';
 import { listPendingDrafts } from '../../lib/draft-store.ts';
 import ReportFields from './ReportFields.astro';
+import { powerHourBaselinePeriod } from '../../lib/power-hour-reports.ts';
 interface Props {
   competitions: ReturnType<typeof getCompetitions>;
   mode?: 'baseline' | 'power-hour';
@@ -12,6 +13,8 @@ interface Props {
 }
 const { competitions, mode, sessionId, suggestedName, endsAt } = Astro.props;
 const drafts = listPendingDrafts();
+const baselinePeriod =
+  mode === 'power-hour' && sessionId ? powerHourBaselinePeriod(sessionId) : undefined;
 ---
 
 <section
@@ -19,7 +22,7 @@ const drafts = listPendingDrafts();
   data-report-workflow={mode || 'competition'}
   x-on:power-hour-session.window="updatePowerHourSession($event.detail)"
   class="panel report-upload"
-  x-data={`reportUpload(${JSON.stringify(drafts)}, ${JSON.stringify({ mode, sessionId, name: suggestedName, endsAt })})`}
+  x-data={`reportUpload(${JSON.stringify(drafts)}, ${JSON.stringify({ mode, sessionId, name: suggestedName, endsAt, baselinePeriod })})`}
 >
   <h2>
     {mode === 'baseline'
@@ -137,7 +140,7 @@ const drafts = listPendingDrafts();
             Each item’s first report sets its baseline. Later reports need a newer timestamp for
             that item.
           </p>
-          <p>Use that item’s baseline period. Totals cannot decrease.</p>
+          <p>The baseline period is reused. Totals cannot decrease.</p>
           <p>
             Final reports can be printed after the cutoff. More than 5 minutes late triggers a
             warning.

@@ -15,23 +15,30 @@
 <div class="form-row">
   <label>
     Report generation time
-    <input x-model="report.generated_at" placeholder="2026-09-27T22:11:00" required />
+    <span class="date-input-wrap">
+      <input
+        type="datetime-local"
+        step="0.001"
+        x-bind:value="reportClock()"
+        x-on:input="updateReportClock($event.target.value)"
+        required
+      />
+    </span>
     <small>
-      ISO date and time. Without an offset, interpreted in <span x-text="timezone"></span>. Add an
-      offset for a repeated daylight-saving hour.
+      Time in <span x-text="timezone"></span>.
     </small>
   </label>
   <div class="form-row">
     <label>
       Period start
       <span class="date-input-wrap">
-        <input type="date" x-model="report.period_start" required />
+        <input type="date" x-model="report.period_start" x-bind:readonly="periodLocked" required />
       </span>
     </label>
     <label>
       Period end
       <span class="date-input-wrap">
-        <input type="date" x-model="report.period_end" required />
+        <input type="date" x-model="report.period_end" x-bind:readonly="periodLocked" required />
       </span>
     </label>
   </div>

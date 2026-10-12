@@ -10,6 +10,7 @@ import {
 } from './metrics.ts';
 import { zonedClock, resolveReportTime } from './report-time.ts';
 import { powerHourTimingWarning } from './power-hour-time.ts';
+import { reportClockFields } from './report-clock-client.ts';
 import { centralReportTime } from './central-time.ts';
 import type { ReportInput } from './competition-store.ts';
 import { validateItems, type TrackedItem } from './tracked-items.ts';
@@ -246,7 +247,8 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
         configs[0]?.timezone ||
         'America/Chicago',
     ),
-    offset: '',
+    ...reportClockFields,
+    periodLocked: false,
     busy: false,
     error: '',
     message: '',
@@ -274,7 +276,6 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
     },
     changeCompetition() {
       this.report = blankReport(this.timezone);
-      this.offset = '';
       this.message = '';
       this.error = '';
     },
@@ -291,11 +292,10 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
           competition_id: this.configuration.id,
           schema_version: this.configuration.schema_version,
           confirmed: true,
-          report: { ...this.report, generated_at: this.report.generated_at + this.offset },
+          report: this.report,
         });
         this.message = result.message;
         this.report = blankReport(this.timezone);
-        this.offset = '';
       } catch (e) {
         this.error = errorText(e);
       } finally {
@@ -318,9 +318,11 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
         sessionId?: number;
         name?: string;
         endsAt?: string;
+        baselinePeriod?: { start: string; end: string };
       } = {},
     ) => ({
       uploadMode: options.mode || 'competition',
+      periodLocked: !!options.baselinePeriod,
       powerHourEndsAt: options.endsAt || '',
       updatePowerHourSession(session: { id: number; ends_at: string } | null) {
         if (session && session.id === options.sessionId) this.powerHourEndsAt = session.ends_at;
@@ -348,6 +350,7 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
             ? 'power_hour_draft'
             : 'draft',
       ...reportImagePreview(),
+      ...reportClockFields,
       busy: false,
       error: '',
       message: '',
@@ -398,7 +401,13 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
         this.token = result.token;
         this.revision = result.revision;
         this.expiresAt = result.expiresAt;
-        this.report = result.report;
+        this.report = options.baselinePeriod
+          ? {
+              ...result.report,
+              period_start: options.baselinePeriod.start,
+              period_end: options.baselinePeriod.end,
+            }
+          : result.report;
         this.originalReport = result.originalReport;
         this.metrics = result.metrics;
         if (

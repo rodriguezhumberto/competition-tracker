@@ -13,7 +13,22 @@ import { ensure } from './validation.ts';
 import { events } from './events.ts';
 import { powerHourTimingWarning } from './power-hour-time.ts';
 
-export function preparePowerHourReport(input: Record<string, unknown>, baseline = false) {
+export function powerHourBaselinePeriod(sessionId: number) {
+  const baseline = db
+    .select({ start: power_hour_reports.period_start, end: power_hour_reports.period_end })
+    .from(power_hour_reports)
+    .where(eq(power_hour_reports.session_id, sessionId))
+    .orderBy(asc(power_hour_reports.id))
+    .get();
+  ensure(baseline, 'This Power Hour has no reviewed baseline.');
+  return baseline;
+}
+
+export function preparePowerHourReport(
+  input: Record<string, unknown>,
+  baseline = false,
+  sessionId?: number,
+) {
   ensure(
     input.confirmed === true || input.confirmed === 'true',
     'Review and confirm the report before saving.',
@@ -26,8 +41,14 @@ export function preparePowerHourReport(input: Record<string, unknown>, baseline 
       draft.profile_version === competition.profile_version,
     'Competition settings changed. Scan and review the report again.',
   );
-  const raw = baseline ? input.baseline_report : input.report;
-  const report = validateReport(competition, typeof raw === 'string' ? JSON.parse(raw) : raw);
+  const submitted = baseline ? input.baseline_report : input.report;
+  let raw = typeof submitted === 'string' ? JSON.parse(submitted) : submitted;
+  if (sessionId !== undefined) {
+    ensure(raw && typeof raw === 'object' && !Array.isArray(raw), 'Invalid report.');
+    const period = powerHourBaselinePeriod(sessionId);
+    raw = { ...raw, period_start: period.start, period_end: period.end };
+  }
+  const report = validateReport(competition, raw);
   return { draft, competition, report };
 }
 
@@ -71,9 +92,14 @@ export function powerHourReportHistory(sessionId: number) {
 }
 
 export function reportSessionScores(sessionId: number, precision: number) {
+  const baselines = new Map<string, number>();
+  for (const report of powerHourReportHistory(sessionId).reverse()) {
+    if (!baselines.has(report.item_code)) baselines.set(report.item_code, report.id);
+  }
   const values = db
     .select({
       id: power_hour_report_values.id,
+      reportId: power_hour_reports.id,
       operator: power_hour_report_values.operator_number,
       item: power_hour_reports.item_code,
       value: power_hour_report_values.value,
@@ -94,7 +120,10 @@ export function reportSessionScores(sessionId: number, precision: number) {
       items: new Map(),
     };
     operator.userId = Math.min(operator.userId, row.id);
-    const item = operator.items.get(row.item) ?? { baseline: row.value, latest: row.value };
+    const item = operator.items.get(row.item) ?? {
+      baseline: baselines.get(row.item) === row.reportId ? row.value : 0,
+      latest: row.value,
+    };
     item.latest = row.value;
     operator.items.set(row.item, item);
     operators.set(row.operator, operator);
@@ -125,7 +154,7 @@ export function savePowerHourReport(input: Record<string, unknown>) {
         'Choose a report-driven Power Hour.',
       );
       ensure(!session.finalized_at, 'Final results have already been published.');
-      const prepared = preparePowerHourReport(input);
+      const prepared = preparePowerHourReport(input, false, session.id);
       ensure(
         prepared.competition.id === session.competition_id,
         'Choose the report format used by this Power Hour.',
@@ -142,12 +171,12 @@ export function savePowerHourReport(input: Record<string, unknown>) {
       const previous = history[0],
         baseline = history.at(-1);
       ensure(
-        report.timestamp >= session.created_at,
-        'Report timestamp falls before the Power Hour start.',
-      );
-      ensure(
         !previous || report.timestamp > previous.timestamp,
         'Report timestamp must be newer than the previous accepted report for this item.',
+      );
+      ensure(
+        !previous || report.timestamp >= session.created_at,
+        'Report timestamp falls before the Power Hour start.',
       );
       ensure(
         !baseline || (report.start === baseline.period_start && report.end === baseline.period_end),
@@ -170,14 +199,10 @@ export function savePowerHourReport(input: Record<string, unknown>) {
           )
           .orderBy(desc(power_hour_reports.timestamp))
           .get();
-        ensure(
-          last,
-          `Operator ${row.id} has no baseline for this item. Remove this row from the review; its starting total is unknown.`,
-        );
         const value = row.values.find((v) => v.metric.id === session.report_metric_id)?.value;
         ensure(value !== undefined, `Operator ${row.id}: the tracked metric is required.`);
         ensure(
-          value >= last.value,
+          value >= (last?.value ?? 0),
           `Operator ${row.id}: the total decreased. Review the value or remove this row; counter resets cannot be scored.`,
         );
       }

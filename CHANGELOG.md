@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.2 — 2026-10-12
+
+### Fixed
+
+- Operators missing from a Power Hour item's baseline start at zero when they first appear in a later report.
+- Report timestamps use a date/time picker in the competition timezone.
+- Subsequent Power Hour reports reuse the reviewed baseline period, including reports for additional PLUs, while retaining their printed generation time.
+- Additional PLU baselines can be printed before the first baseline without changing the Power Hour timer or awarding points.
+
 ## 1.1.1 — 2026-10-09
 
 ### Fixed

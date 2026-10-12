@@ -127,7 +127,6 @@ test('timestamps serialize, stale drafts and counter resets cannot alter accepte
   assert.throws(() => update(session.id, 2), /newer/);
   assert.throws(() => update(session.id, 1), /newer/);
   assert.throws(() => update(session.id, 3, [['001', '102.00']]), /decreased/);
-  assert.throws(() => update(session.id, 3, [['003', '5.00']]), /no baseline/);
   const raw = report(3),
     preview = draft(raw);
   assert.throws(
@@ -317,7 +316,7 @@ test('PLUs establish independent baselines, accept independently ordered timesta
   assert.equal(store.sessionScores(session.id)[0].userId, original.userId);
 });
 
-test('PLU duplicate/older reports, missing operator baselines and decreases are checked within the item', () => {
+test('PLU duplicate/older reports and decreases are checked within the item', () => {
   const { session, upload } = pluSession();
   upload('00100', 5, [['001', '108.00']]);
   upload('00200', 2, [['001', '50.00']]);
@@ -326,19 +325,79 @@ test('PLU duplicate/older reports, missing operator baselines and decreases are 
   assert.throws(() => upload('00200', 1, [['001', '55.00']]), /newer/);
   assert.throws(() => upload('00100', 4, [['001', '109.00']]), /newer/);
   assert.throws(() => upload('00200', 4, [['001', '53.00']]), /decreased/);
-  assert.throws(() => upload('00200', 4, [['002', '205.00']]), /no baseline for this item/);
-  assert.equal(store.sessionScores(session.id)[0].clicks, 12);
-  assert.equal(powerHourReportHistory(session.id).length, 4);
+  upload('00200', 4, [['002', '205.00']]);
+  assert.equal(store.sessionScores(session.id).find((row) => row.name === '002')?.clicks, 205);
+  assert.equal(store.sessionScores(session.id).find((row) => row.name === '001')?.clicks, 12);
+  assert.equal(powerHourReportHistory(session.id).length, 5);
 });
 
-test('additional PLU reports cannot precede the start and warn after the five-minute grace period', (t) => {
+test('operators missing from the baseline start at zero and retain subsequent progress', () => {
+  const session = startReportSession();
+  update(session.id, 1, [
+    ['003', '5.00'],
+    ['004', '0.00'],
+  ]);
+  assert.equal(store.sessionScores(session.id).find((row) => row.name === '003')?.clicks, 5);
+  assert.equal(
+    store.sessionScores(session.id).some((row) => row.name === '004'),
+    false,
+  );
+  update(session.id, 2, [['001', '103.00']]);
+  update(session.id, 3, [
+    ['003', '8.00'],
+    ['004', '2.00'],
+  ]);
+  assert.deepEqual(
+    store.sessionScores(session.id).map((row) => [row.name, row.clicks]),
+    [
+      ['003', 8],
+      ['001', 3],
+      ['004', 2],
+    ],
+  );
+  assert.throws(() => update(session.id, 4, [['003', '7.00']]), /decreased/);
+  assert.throws(() => update(session.id, 4, [['005', '-1.00']]), /decreased/);
+});
+
+test('later Power Hour reports reuse the reviewed period even when extracted dates are wrong or missing', () => {
+  const { session } = pluSession();
+  for (const [index, code] of ['00100', '00200'].entries()) {
+    const raw = {
+      ...report(index + 1, [['001', '105.00']]),
+      item_code: code,
+      period_start: index ? '' : '1900-01-01',
+      period_end: 'unreadable',
+    };
+    const preview = createDraft(getCompetition(session.competition_id!), raw, 'plu-proof.png');
+    const saved = savePowerHourReport({
+      session_id: session.id,
+      token: preview.token,
+      revision: preview.revision,
+      report: raw,
+      confirmed: true,
+    });
+    assert.equal(saved.period_start, today);
+    assert.equal(saved.period_end, today);
+    assert.equal(saved.timestamp, raw.generated_at);
+    assert.equal(saved.is_baseline, index === 1);
+  }
+});
+
+test('additional PLU baselines can precede the start while scored updates stay within the session', (t) => {
   const { session, upload } = pluSession();
-  assert.throws(() => upload('00200', -1, [['001', '50.00']]), /before the Power Hour start/);
+  assert.equal(upload('00200', -2, [['001', '50.00']]).is_baseline, true);
+  assert.equal(upload('00300', -1, [['001', '25.00']]).is_baseline, true);
+  assert.equal(store.sessionScores(session.id).length, 0);
+  assert.equal(store.openSession()?.created_at, new Date(start).toISOString());
+  assert.throws(() => upload('00200', -2, [['001', '50.00']]), /newer/);
+  assert.throws(() => upload('00200', -1, [['001', '51.00']]), /before the Power Hour start/);
+  upload('00200', 1, [['001', '55.00']]);
+  upload('00300', 2, [['001', '28.00']]);
+  assert.equal(store.sessionScores(session.id)[0].clicks, 8);
   t.mock.method(Date, 'now', () => start + 100 * 60000);
-  assert.equal(upload('00200', 2, [['001', '50.00']]).is_baseline, true);
   assert.equal(upload('00200', 61, [['001', '55.00']]).warning, null);
   assert.match(upload('00200', 66, [['001', '56.00']]).warning!, /more than 5 minutes/);
-  assert.equal(powerHourReportHistory(session.id).length, 4);
+  assert.equal(powerHourReportHistory(session.id).length, 7);
 });
 
 test('report mode waits indefinitely for final reports, then publishes and freezes results', (t) => {

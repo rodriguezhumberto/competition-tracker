@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import sharp from 'sharp';
 import { authenticateAdmin } from './helpers/admin.ts';
 import { centralDate } from '../../src/lib/central-time.ts';
+import { pickerClock } from '../../src/lib/report-clock-client.ts';
 
 async function createCompetition(
   page: Page,
@@ -46,7 +47,9 @@ test('multiple-item setup and manual reports retain separate baselines and filte
   const later = new Date(Date.now() - 60000).toISOString();
   const save = async (code: string, timestamp: string, value: string) => {
     await manual.getByLabel('Tracked item').selectOption(code);
-    await manual.getByLabel('Report generation time').fill(timestamp);
+    await manual
+      .getByLabel('Report generation time')
+      .fill(pickerClock(timestamp, 'America/Chicago'));
     const day = centralDate(new Date(timestamp));
     await manual.getByLabel('Period start', { exact: true }).fill(day);
     await manual.getByLabel('Period end', { exact: true }).fill(day);
