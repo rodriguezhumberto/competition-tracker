@@ -52,6 +52,11 @@ test('reviewed PLU reports start a view-only Power Hour and aggregate independen
   expect(created.ok(), await created.text()).toBe(true);
   await page.reload();
   await page.getByRole('switch', { name: 'Use admin-uploaded reports' }).check();
+  const baselineHeading = page.locator('[data-report-workflow="baseline"] > h2');
+  await expect(baselineHeading).toHaveCSS('color', 'rgb(24, 42, 59)');
+  await page.getByRole('button', { name: 'Switch to dark mode' }).click();
+  await expect(baselineHeading).toHaveCSS('color', 'rgb(230, 237, 244)');
+  await page.getByRole('button', { name: 'Switch to light mode' }).click();
   await expect(page.getByLabel('Shared password', { exact: true })).not.toBeVisible();
   const buffer = await sharp({
     create: { width: 120, height: 80, channels: 3, background: '#fff' },

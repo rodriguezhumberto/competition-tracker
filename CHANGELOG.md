@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.3 — 2026-10-14
+
+### Fixed
+
+- Baseline upload headings and labels remain readable inside the admin Power Hour panel in both themes.
+
 ## 1.1.2 — 2026-10-12
 
 ### Fixed

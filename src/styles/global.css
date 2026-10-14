@@ -741,9 +741,15 @@ footer {
 .power-hour-admin h2 {
   margin: 12px 0;
 }
-.power-hour-admin p {
+.power-hour-admin > div > p {
   color: #b0c7db;
   margin: 0;
+}
+.power-hour-admin .report-upload {
+  color: #182a3b;
+}
+:root[data-theme='dark'] .power-hour-admin .report-upload {
+  color: #e6edf4;
 }
 .power-hour-admin form {
   min-width: 240px;
