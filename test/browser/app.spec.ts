@@ -123,10 +123,18 @@ test('admin setup, SSR, OCR validation, Power Hour takeover and mobile layout', 
   await expect(upload.locator('.notice[role=status]')).toHaveText(
     'Report saved. Updated 1 participant.',
   );
+  await expect(upload.locator('input[type=file]')).toHaveValue('');
+  await expect(upload.getByAltText('Report orientation preview')).not.toBeVisible();
   await submitImage();
   await upload.getByLabel('I checked the dates and values against the source report.').check();
   await upload.getByRole('button', { name: 'Confirm & save report' }).click();
   await expect(upload.getByRole('alert')).toContainText('newer than the last entry');
+  expect(
+    await upload
+      .locator('input[type=file]')
+      .evaluate((input: HTMLInputElement) => input.files?.length),
+  ).toBe(1);
+  await expect(upload.locator('.report-preview')).toBeVisible();
   await page.goto('/competitions');
   await page.getByRole('link', { name: 'View The monthly climb standings' }).click();
   await expect(page.getByRole('heading', { name: 'The monthly climb.' })).toBeVisible();

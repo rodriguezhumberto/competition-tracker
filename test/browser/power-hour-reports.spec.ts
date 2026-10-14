@@ -10,6 +10,7 @@ test('reviewed PLU reports start a view-only Power Hour and aggregate independen
   browser,
 }) => {
   await authenticateAdmin(page);
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.route('**/api/orientation', (route) =>
     route.fulfill({
       json: { status: 'confident', rotation: 0, confidence: 20, reason: 'detected' },
@@ -17,6 +18,7 @@ test('reviewed PLU reports start a view-only Power Hour and aggregate independen
   );
   let uploadMode = '';
   await page.route('**/api/upload', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
     const response = await route.fetch();
     const result = await response.json();
     if (response.ok() && uploadMode === 'power-hour') {
@@ -59,19 +61,31 @@ test('reviewed PLU reports start a view-only Power Hour and aggregate independen
   await page.getByRole('button', { name: 'Switch to light mode' }).click();
   await expect(page.getByLabel('Shared password', { exact: true })).not.toBeVisible();
   const buffer = await sharp({
-    create: { width: 120, height: 80, channels: 3, background: '#fff' },
+    create: { width: 300, height: 1600, channels: 3, background: '#fff' },
   })
     .png()
     .toBuffer();
   async function scan(mode: string, code: string, minutesAgo: number, value: string) {
     uploadMode = mode;
     const upload = page.locator(`[data-report-workflow="${mode}"]`);
+    await upload.evaluate((element) => element.scrollIntoView({ block: 'start' }));
     await upload
       .locator('input[type=file]')
       .setInputFiles({ name: 'report.png', mimeType: 'image/png', buffer });
     await expect(upload.getByRole('button', { name: 'Scan & preview' })).toBeEnabled();
-    await upload.getByRole('button', { name: 'Scan & preview' }).click();
+    await expect
+      .poll(() => upload.evaluate((element) => Math.abs(element.getBoundingClientRect().top - 12)))
+      .toBeLessThan(20);
+    const scanButton = upload.getByRole('button', { name: 'Scan & preview' });
+    await scanButton.scrollIntoViewIfNeeded();
+    const readingPosition = await page.evaluate(() => scrollY);
+    await scanButton.click();
+    await expect(upload.getByRole('button', { name: 'Reading your report…' })).toBeVisible();
+    expect(Math.abs((await page.evaluate(() => scrollY)) - readingPosition)).toBeLessThan(20);
     await expect(upload.getByRole('heading', { name: 'Review extracted report' })).toBeVisible();
+    await expect
+      .poll(() => upload.evaluate((element) => Math.abs(element.getBoundingClientRect().top - 12)))
+      .toBeLessThan(20);
     if (mode === 'power-hour') {
       await expect(upload.getByLabel('Period start', { exact: true })).toHaveValue(day);
       await expect(upload.getByLabel('Period end', { exact: true })).toHaveValue(day);
@@ -96,6 +110,13 @@ test('reviewed PLU reports start a view-only Power Hour and aggregate independen
   await baseline.getByLabel('Power Hour name', { exact: true }).fill('Report race');
   await baseline.getByRole('button', { name: 'Start Power Hour', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Report race is live.' })).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator('[data-report-workflow="power-hour"]')
+        .evaluate((element) => Math.abs(element.getBoundingClientRect().top - 12)),
+    )
+    .toBeLessThan(20);
   const viewer = await browser.newContext();
   const lobby = await viewer.newPage();
   try {
@@ -111,6 +132,14 @@ test('reviewed PLU reports start a view-only Power Hour and aggregate independen
       await expect(page.locator('[data-report-workflow="power-hour"] .report-preview')).toHaveCount(
         0,
       );
+      await expect(upload.locator('input[type=file]')).toHaveValue('');
+      await expect(upload.getByAltText('Report orientation preview')).not.toBeVisible();
+      await expect(upload.locator('.dropzone strong')).toHaveText('Choose a report image');
+      await expect
+        .poll(() =>
+          upload.evaluate((element) => Math.abs(element.getBoundingClientRect().top - 12)),
+        )
+        .toBeLessThan(20);
     }
     await confirm('0004012', 7, '100');
     await expect(lobby.locator('.lobby-rank-row')).toHaveCount(0);

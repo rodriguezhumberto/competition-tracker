@@ -11,6 +11,12 @@ import {
 import { zonedClock, resolveReportTime } from './report-time.ts';
 import { powerHourTimingWarning } from './power-hour-time.ts';
 import { reportClockFields } from './report-clock-client.ts';
+import {
+  uploadPosition,
+  restoreUploadPosition,
+  saveUploadPosition,
+  takeUploadPosition,
+} from './report-upload-position.ts';
 import { centralReportTime } from './central-time.ts';
 import type { ReportInput } from './competition-store.ts';
 import { validateItems, type TrackedItem } from './tracked-items.ts';
@@ -381,6 +387,11 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
       reviewed: false,
       modeDescriptions,
       async init() {
+        if (options.mode === 'power-hour' && options.sessionId) {
+          const top = takeUploadPosition(options.sessionId);
+          const root = document.querySelector<HTMLElement>('[data-report-workflow="power-hour"]');
+          if (top !== null && root) await restoreUploadPosition(root, top);
+        }
         const token = new URLSearchParams(location.search).get(this.draftQuery);
         if (token) await this.reopen(token);
       },
@@ -568,9 +579,12 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
           const response = await fetch('/api/upload', { method: 'POST', body }),
             result = await response.json();
           if (!response.ok) throw new Error(result.error);
+          const root = (event.target as HTMLElement).closest<HTMLElement>('[data-report-workflow]');
+          const top = root ? uploadPosition(root) : null;
           this.loadDraft(result);
           await this.refreshDrafts();
           this.message = result.message;
+          if (root && top !== null) await restoreUploadPosition(root, top);
         } catch (e) {
           this.error = errorText(e);
         } finally {
@@ -581,7 +595,7 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
         if (this.report && this.report.rows.length < 100)
           this.report.rows.push({ participant_id: '', values: {} });
       },
-      async confirm() {
+      async confirm(root: HTMLElement) {
         if (this.busy || !this.reviewed || this.schemaChanged || this.needsItemSelection) return;
         this.busy = true;
         this.error = '';
@@ -612,24 +626,50 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
                 : {}),
             },
           );
-          this.message = result.message;
+          const top = uploadPosition(root);
+          this.message = result.message + (result.warning ? ' ' + result.warning : '');
+          this.resetImage();
+          const fileInput = root.querySelector<HTMLInputElement>('input[type="file"]');
+          if (fileInput) fileInput.value = '';
           this.report = null;
           this.originalReport = null;
           this.token = '';
           this.clearDraftUrl();
           this.reviewed = false;
-          if (options.mode) {
-            const destination =
-              '/admin?success=1' +
-              (options.mode === 'power-hour' ? '&power_hour_session=' + options.sessionId : '') +
-              (result.warning ? '&warning=' + encodeURIComponent(result.warning) : '') +
-              '#power-hour';
-            if (location.pathname + location.search + location.hash === destination)
-              location.reload();
-            else location.assign(destination);
+          if (options.mode === 'baseline') {
+            saveUploadPosition(result.session_id, top);
+            location.assign('/admin?success=1&power_hour_session=' + result.session_id);
             return;
           }
+          if (options.mode === 'power-hour') {
+            const history = document.querySelector(
+              `[data-power-hour-history="${options.sessionId}"]`,
+            );
+            if (history) {
+              const row = document.createElement('li');
+              row.dataset.reportTimestamp = result.timestamp;
+              row.textContent =
+                (result.is_baseline ? 'Baseline' : 'Update') +
+                (result.item_code ? ' · PLU ' + result.item_code : '') +
+                ' · ' +
+                new Date(result.timestamp).toLocaleString() +
+                ' ';
+              if (result.has_proof) {
+                const link = document.createElement('a');
+                link.href = '/api/proof?power_hour_report=' + result.report_id;
+                link.target = '_blank';
+                link.rel = 'noreferrer';
+                link.textContent = 'View image';
+                row.append(link);
+              }
+              const next = [...history.children].find(
+                (item) => (item as HTMLElement).dataset.reportTimestamp! < result.timestamp,
+              );
+              history.insertBefore(row, next || null);
+            }
+          }
           await this.refreshDrafts();
+          await restoreUploadPosition(root, top);
         } catch (e) {
           this.error = errorText(e);
         } finally {

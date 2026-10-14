@@ -3,6 +3,7 @@ import { adjustCropField, moveCrop } from './report-crop-editor.ts';
 import type { PageBoundary } from './page-boundary.ts';
 import { fullReportCrop, validateReportCrop, type ReportCrop } from './report-crop.ts';
 import type { ReportOrientation } from './report-orientation.ts';
+import { uploadPosition, restoreUploadPosition } from './report-upload-position.ts';
 // Browser image decoding honors EXIF orientation before we apply manual rotation.
 export function reportImagePreview() {
   const renderer = createPreviewRenderer();
@@ -48,6 +49,8 @@ export function reportImagePreview() {
       this.detectingOrientation = false;
     },
     async selectImage(event: Event) {
+      const root = (event.target as HTMLElement).closest<HTMLElement>('[data-report-workflow]');
+      const top = root ? uploadPosition(root) : null;
       const current = ++selection;
       this.cancelPreviewRender();
       this.cancelOrientation();
@@ -92,7 +95,29 @@ export function reportImagePreview() {
         }
       } finally {
         if (current === selection) this.imageLoading = false;
+        if (current === selection && root && top !== null) await restoreUploadPosition(root, top);
       }
+    },
+    resetImage() {
+      ++selection;
+      this.cancelPreviewRender();
+      this.cancelOrientation();
+      this.cancelPageBoundary();
+      renderer.clear();
+      this.clearCrop();
+      this.file = null;
+      this.filename = '';
+      this.imagePreview = '';
+      this.rotation = 0;
+      this.fineRotation = 0;
+      this.straightening = false;
+      this.imageLoading = false;
+      this.previewAdjusting = false;
+      this.orientation = null;
+      this.orientationMessage = '';
+      this.pageBoundary = null;
+      this.pageBoundaryMessage = '';
+      this.cropMessage = '';
     },
     async detectOrientation() {
       if (!this.file || !renderer.ready) return;

@@ -14,6 +14,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       is_baseline: saved.is_baseline,
       warning: saved.warning,
       timestamp: saved.timestamp,
+      report_id: saved.id,
+      item_code: saved.item_code,
+      has_proof: !!saved.proof_image_path,
     });
   } catch (error) {
     return Response.json(

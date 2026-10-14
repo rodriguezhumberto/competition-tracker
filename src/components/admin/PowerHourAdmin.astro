@@ -201,9 +201,9 @@ const scheduledEnd = session
       </form>
     )}
     <h3>Report history</h3>
-    <ol>
+    <ol data-power-hour-history={reportSession.id}>
       {history.map((report) => (
-        <li>
+        <li data-report-timestamp={report.timestamp}>
           {baselineIds.get(report.item_code) === report.id ? 'Baseline' : 'Update'}{' '}
           {report.item_code && `· PLU ${report.item_code}`} ·{' '}
           {new Date(report.timestamp).toLocaleString()}{' '}

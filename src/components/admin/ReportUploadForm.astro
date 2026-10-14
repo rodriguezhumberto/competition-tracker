@@ -96,7 +96,7 @@ const baselinePeriod =
     </button>
   </form>
   <template x-if="report">
-    <form class="report-preview" x-on:submit.prevent="confirm()">
+    <form class="report-preview" x-on:submit.prevent="confirm($root)">
       <h3>Review extracted report</h3>
       {mode === 'power-hour' && (
         <p

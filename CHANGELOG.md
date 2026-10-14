@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.4 — 2026-10-14
+
+### Fixed
+
+- Successful uploads clear the selected image and adjustments; failed submissions retain them for retry.
+- Reserved preview space and position restoration reduce page jumps during mobile upload, OCR, and confirmation. Subsequent Power Hour reports update in place, including report history and standings.
+
 ## 1.1.3 — 2026-10-14
 
 ### Fixed

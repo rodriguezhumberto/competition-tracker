@@ -15,47 +15,53 @@ const fields = [
 
 <div class="report-image-preview" x-show="file" x-cloak>
   <p>Align the text, then crop to the report.</p>
-  <div
-    class="report-crop-stage"
-    x-bind:class="{'is-cropping':cropping}"
-    x-show="imagePreview"
-    x-on:pointerdown="startCropDrag($event)"
-    x-on:pointermove="moveCropDrag($event)"
-    x-on:pointerup="endCropDrag($event)"
-    x-on:pointercancel="endCropDrag($event)"
-    x-on:lostpointercapture="endCropDrag($event)"
-  >
-    <canvas
-      x-ref="rotationPreview"
-      x-show="previewAdjusting"
-      aria-label="Live report orientation preview"
-    ></canvas>
-    <img
-      x-show="!previewAdjusting"
-      x-bind:src="imagePreview || undefined"
-      alt="Report orientation preview"
-      draggable="false"
-    />
-    <div class="report-alignment-grid" x-show="straightening && !cropping" aria-hidden="true"></div>
+  <div class="report-preview-frame">
     <div
-      class="report-crop-selection"
-      x-show="cropping"
-      role="group"
-      aria-label="Crop selection"
-      tabindex="0"
-      data-crop-handle="move"
-      x-bind:style="'left:'+cropDraft.x*100+'%;top:'+cropDraft.y*100+'%;width:'+cropDraft.width*100+'%;height:'+cropDraft.height*100+'%'"
-      x-on:keydown="cropKeyboard($event,'move')"
+      class="report-crop-stage"
+      x-bind:class="{'is-cropping':cropping}"
+      x-show="imagePreview"
+      x-on:pointerdown="startCropDrag($event)"
+      x-on:pointermove="moveCropDrag($event)"
+      x-on:pointerup="endCropDrag($event)"
+      x-on:pointercancel="endCropDrag($event)"
+      x-on:lostpointercapture="endCropDrag($event)"
     >
-      {corners.map(([corner, label]) => (
-        <button
-          type="button"
-          class={`report-crop-handle handle-${corner}`}
-          aria-label={`Resize crop ${label}`}
-          data-crop-handle={corner}
-          x-on:keydown={`cropKeyboard($event,'${corner}')`}
-        />
-      ))}
+      <canvas
+        x-ref="rotationPreview"
+        x-show="previewAdjusting"
+        aria-label="Live report orientation preview"
+      ></canvas>
+      <img
+        x-show="!previewAdjusting"
+        x-bind:src="imagePreview || undefined"
+        alt="Report orientation preview"
+        draggable="false"
+      />
+      <div
+        class="report-alignment-grid"
+        x-show="straightening && !cropping"
+        aria-hidden="true"
+      ></div>
+      <div
+        class="report-crop-selection"
+        x-show="cropping"
+        role="group"
+        aria-label="Crop selection"
+        tabindex="0"
+        data-crop-handle="move"
+        x-bind:style="'left:'+cropDraft.x*100+'%;top:'+cropDraft.y*100+'%;width:'+cropDraft.width*100+'%;height:'+cropDraft.height*100+'%'"
+        x-on:keydown="cropKeyboard($event,'move')"
+      >
+        {corners.map(([corner, label]) => (
+          <button
+            type="button"
+            class={`report-crop-handle handle-${corner}`}
+            aria-label={`Resize crop ${label}`}
+            data-crop-handle={corner}
+            x-on:keydown={`cropKeyboard($event,'${corner}')`}
+          />
+        ))}
+      </div>
     </div>
   </div>
   <div x-show="cropping" class="report-crop-editor" x-cloak>
