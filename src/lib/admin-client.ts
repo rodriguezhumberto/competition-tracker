@@ -11,6 +11,7 @@ import {
 import { zonedClock, resolveReportTime } from './report-time.ts';
 import { powerHourTimingWarning } from './power-hour-time.ts';
 import { reportClockFields } from './report-clock-client.ts';
+import { reportMetricTotal } from './report-metric-totals.ts';
 import {
   uploadPosition,
   restoreUploadPosition,
@@ -384,6 +385,9 @@ export function registerCompetitionAdmin(Alpine: typeof AlpineType) {
       identifierLabel: '',
       metrics: [] as Metric[],
       report: null as ReportInput | null,
+      metricTotal(metric: Metric) {
+        return reportMetricTotal(this.report?.rows || [], metric);
+      },
       reviewed: false,
       modeDescriptions,
       async init() {

@@ -1,3 +1,10 @@
+---
+interface Props {
+  showTotals?: boolean;
+}
+const { showTotals = false } = Astro.props;
+---
+
 <div class="setup-field" x-show="multipleItems" x-cloak>
   <label>
     <span x-text="itemLabel"></span>
@@ -100,6 +107,23 @@
         </tr>
       </template>
     </tbody>
+    {showTotals && (
+      <tfoot>
+        <tr>
+          <th scope="row">Total</th>
+          <template x-for="metric in metrics" x-bind:key="metric.key">
+            <td>
+              <strong
+                x-bind:aria-label="metric.label+' total'"
+                x-text="metricTotal(metric).value"
+              ></strong>
+              <small x-show="metricTotal(metric).incomplete">Incomplete</small>
+            </td>
+          </template>
+          <td></td>
+        </tr>
+      </tfoot>
+    )}
   </table>
 </div>
 <button

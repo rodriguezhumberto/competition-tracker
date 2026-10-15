@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 — 2026-10-14
+
+### Added
+
+- Scanned report reviews show live totals for each metric, with incomplete totals flagged when cells are missing or invalid.
+
 ## 1.1.4 — 2026-10-14
 
 ### Fixed

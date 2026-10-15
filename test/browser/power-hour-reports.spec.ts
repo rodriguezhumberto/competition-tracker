@@ -103,6 +103,9 @@ test('reviewed PLU reports start a view-only Power Hour and aggregate independen
       .getByLabel('Report generation time')
       .fill(pickerClock(new Date(now - minutesAgo * 60000).toISOString(), 'America/Chicago'));
     await upload.getByLabel('Number Sold row 1').fill(value);
+    await expect(upload.getByLabel('Number Sold total')).toHaveText(
+      Number(value).toLocaleString('en-US'),
+    );
     await upload.getByLabel('I checked the dates and values against the source report.').check();
     return upload;
   }

@@ -1899,6 +1899,13 @@ footer {
   margin-top: 5px;
   text-transform: none;
 }
+.report-input-table tfoot {
+  border-top: 2px solid #9bb8d0;
+}
+.report-input-table tfoot small {
+  display: block;
+  margin-top: 4px;
+}
 .report-preview > .checkbox {
   margin: 16px 0 0;
 }
